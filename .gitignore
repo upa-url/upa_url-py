@@ -1,0 +1,14 @@
+# CMake build directory
+/build/
+
+# Packaging
+/dist/
+/wheelhouse/
+__pycache__
+_skbuild
+*.pyd
+*.so
+
+# Visual Studio
+.vs/
+.vscode/
