@@ -1,0 +1,52 @@
+[build-system]
+requires = [
+    "scikit-build-core >=0.10",
+    "nanobind >=2.8.0"
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "upa_url"
+version = "0.0.1"
+authors = [
+  { name="Rimas Misevičius", email="rmisev3@gmail.com" },
+]
+description = "WHATWG URL Standard compliant URL parser library"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+]
+license = "BSD-2-Clause"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/upa-url/upa_url-py"
+Issues = "https://github.com/upa-url/upa_url-py/issues"
+
+
+[tool.scikit-build]
+# Protect the configuration against future changes in scikit-build-core
+minimum-version = "build-system.requires"
+
+# Setuptools-style build caching in a local directory
+build-dir = "build/{wheel_tag}"
+
+# Build stable ABI wheels for CPython 3.12+
+wheel.py-api = "cp312"
+
+[tool.cibuildwheel]
+# Necessary to see build output from the actual compilation
+build-verbosity = 1
+
+# Run tests to ensure that the package was correctly built
+test-command = "python -m unittest discover -s {project}/tests"
+
+# Don't test Python 3.8 wheels on macOS/arm64
+test-skip="cp38-macosx_*:arm64"
+
+# Needed for full C++17 support
+[tool.cibuildwheel.macos.environment]
+MACOSX_DEPLOYMENT_TARGET = "10.15"
