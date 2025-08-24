@@ -103,6 +103,8 @@ class TestURLSearchParams(unittest.TestCase):
         self.assertEqual(list(sp), [('b', '2'), ('a', '1')])
         sp.sort()
         self.assertEqual(list(sp), [('a', '1'), ('b', '2')])
+        self.assertEqual(list(sp.keys()), ['a', 'b'])
+        self.assertEqual(list(sp.values()), ['1', '2'])
 
 if __name__ == '__main__':
     unittest.main()

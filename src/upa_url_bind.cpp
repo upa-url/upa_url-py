@@ -91,6 +91,14 @@ NB_MODULE(upa_url, m) {
                 return nb::make_iterator(nb::type<upa::url_search_params>(),
                     "iterator", self.begin(), self.end());
             }, nb::keep_alive<0, 1>())
+        .def("keys", [](upa::url_search_params& self) {
+                return nb::make_key_iterator(nb::type<upa::url_search_params>(),
+                    "iterator", self.begin(), self.end());
+            }, nb::keep_alive<0, 1>())
+        .def("values", [](upa::url_search_params& self) {
+                return nb::make_value_iterator(nb::type<upa::url_search_params>(),
+                    "iterator", self.begin(), self.end());
+            }, nb::keep_alive<0, 1>())
         .def("__str__", &upa::url_search_params::to_string)
         ;
 }
