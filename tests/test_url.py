@@ -1,3 +1,4 @@
+import copy
 import unittest
 from upa_url import URL, URLSearchParams
 
@@ -20,6 +21,19 @@ class TestURL(unittest.TestCase):
         u = URL.parse(input)
         self.assertIsNone(u)
         self.assertRaises(RuntimeError, URL, input)
+
+    def test_copy(self):
+        a = URL("ws://h/")
+
+        b = copy.copy(a)
+        self.assertEqual(a.href, b.href)
+        b.pathname = 'p'
+        self.assertNotEqual(a.href, b.href)
+
+        b = copy.deepcopy(a)
+        self.assertEqual(a.href, b.href)
+        b.pathname = 'p'
+        self.assertNotEqual(a.href, b.href)
 
     # getters / setters
     def test_props(self):
@@ -71,6 +85,19 @@ class TestURLSearchParams(unittest.TestCase):
         input = '?a=1&b=2'
         sp = URLSearchParams(input)
         self.assertEqual(list(sp), [('a', '1'), ('b', '2')])
+
+    def test_copy(self):
+        a = URLSearchParams("a=1")
+
+        b = copy.copy(a)
+        self.assertEqual(str(a), str(b))
+        b.set('b', '2')
+        self.assertNotEqual(str(a), str(b))
+
+        b = copy.deepcopy(a)
+        self.assertEqual(str(a), str(b))
+        b.set('b', '2')
+        self.assertNotEqual(str(a), str(b))
 
     def test_functions(self):
         input = 'a=1&b=2'

@@ -23,6 +23,12 @@ NB_MODULE(upa_url, m) {
     nb::class_<upa::url>(m, "URL")
         .def(nb::init<std::string_view>(), nb::arg("url"))
         .def(nb::init<std::string_view, std::string_view>(), nb::arg("url"), nb::arg("base"))
+        .def("__copy__", [](const upa::url& self) {
+                return upa::url(self);
+            })
+        .def("__deepcopy__", [](const upa::url& self, nb::dict) {
+                return upa::url(self);
+            })
         .def_prop_rw("href", &upa::url::get_href, &upa::url::set_href<std::string_view>)
         .def_prop_ro("origin", &upa::url::origin)
         .def_prop_rw("protocol", &upa::url::get_protocol, &upa::url::set_protocol<std::string_view>)
@@ -63,6 +69,12 @@ NB_MODULE(upa_url, m) {
         .def(nb::init<>())
         .def(nb::init<std::string_view>())
         //TODO: add more constructors
+        .def("__copy__", [](const upa::url_search_params& self) {
+                return upa::url_search_params(self);
+            })
+        .def("__deepcopy__", [](const upa::url_search_params& self, nb::dict) {
+                return upa::url_search_params(self);
+            })
         .def_prop_ro("size", &upa::url_search_params::size)
         .def("__len__", &upa::url_search_params::size)
         .def("append", &upa::url_search_params::append<std::string_view, std::string_view>,
