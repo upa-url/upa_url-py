@@ -14,6 +14,17 @@
 
 namespace nb = nanobind;
 
+namespace {
+
+inline std::string_view to_string_view(nb::str str) {
+    Py_ssize_t ssize{};
+
+    const char* pdata = PyUnicode_AsUTF8AndSize(str.ptr(), &ssize);
+    return { pdata, static_cast<std::size_t>(ssize) };
+}
+
+} // namespace
+
 NB_MODULE(upa_url, m) {
     m.doc() = "upa_url module";
 
@@ -66,9 +77,41 @@ NB_MODULE(upa_url, m) {
 
     // URLSearchParams class
     nb::class_<upa::url_search_params>(m, "URLSearchParams")
+        // constructors
         .def(nb::init<>())
         .def(nb::init<std::string_view>())
-        //TODO: add more constructors
+        .def("__init__", [](upa::url_search_params* t, nb::dict dict) {
+                new (t) upa::url_search_params{};
+                for (auto [key, value] : dict)
+                    t->append(
+                        to_string_view(nb::str(key)),
+                        to_string_view(nb::str(value)));
+            })
+        .def("__init__", [](upa::url_search_params* t, nb::iterable iterable) {
+                new (t) upa::url_search_params{};
+                for (auto item : iterable) {
+                    if (nb::isinstance<nb::tuple>(item)) {
+                        auto tup = nb::tuple(item);
+                        if (tup.size() != 2)
+                            nb::raise("each inner tuple must contain 2 items");
+                        t->append(
+                            to_string_view(nb::str(nb::handle(tup[0]))),
+                            to_string_view(nb::str(nb::handle(tup[1]))));
+                        continue;
+                    }
+                    if (nb::isinstance<nb::list>(item)) {
+                        auto lst = nb::list(item);
+                        if (lst.size() != 2)
+                            nb::raise("each inner list must contain 2 items");
+                        t->append(
+                            to_string_view(nb::str(nb::handle(lst[0]))),
+                            to_string_view(nb::str(nb::handle(lst[1]))));
+                        continue;
+                    }
+                    nb::raise("items must be tuples or lists");
+                }
+            })
+
         .def("__copy__", [](const upa::url_search_params& self) {
                 return upa::url_search_params(self);
             })

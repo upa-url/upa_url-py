@@ -85,6 +85,26 @@ class TestURLSearchParams(unittest.TestCase):
         input = '?a=1&b=2'
         sp = URLSearchParams(input)
         self.assertEqual(list(sp), [('a', '1'), ('b', '2')])
+        # dictionary input
+        input = {'a': '1', 'A\x00Z': 'a\x00z'}
+        sp = URLSearchParams(input)
+        self.assertEqual(str(sp), 'a=1&A%00Z=a%00z')
+        # list of tuples input
+        input = [('a', '1'), ('A\x00Z', 'a\x00z')]
+        sp = URLSearchParams(input)
+        self.assertEqual(str(sp), 'a=1&A%00Z=a%00z')
+        # list of lists input
+        input = [['a', '1'], ['A\x00Z', 'a\x00z']]
+        sp = URLSearchParams(input)
+        self.assertEqual(str(sp), 'a=1&A%00Z=a%00z')
+
+    def test_construct_fails(self):
+        input = [('a', 'b', 'c')]
+        with self.assertRaises(BaseException):
+            URLSearchParams(input)
+        input = [['a']]
+        with self.assertRaises(BaseException):
+            URLSearchParams(input)
 
     def test_copy(self):
         a = URLSearchParams("a=1")
