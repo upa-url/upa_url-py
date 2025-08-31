@@ -105,6 +105,10 @@ class TestURLSearchParams(unittest.TestCase):
         input = [['a']]
         with self.assertRaises(BaseException):
             URLSearchParams(input)
+        # unpaired surrogate
+        input = [('p', '-\uD800-')]
+        with self.assertRaises(UnicodeEncodeError):
+            URLSearchParams(input)
 
     def test_copy(self):
         a = URLSearchParams("a=1")

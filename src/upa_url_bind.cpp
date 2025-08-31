@@ -19,8 +19,13 @@ namespace {
 inline std::string_view to_string_view(nb::str str) {
     Py_ssize_t ssize{};
 
+    // On error, the PyUnicode_AsUTF8AndSize sets an exception, sets
+    // ssize to -1 (atarting with Python 3.13) and returns NULL.
+    // https://docs.python.org/3/c-api/unicode.html#c.PyUnicode_AsUTF8AndSize
     const char* pdata = PyUnicode_AsUTF8AndSize(str.ptr(), &ssize);
-    return { pdata, static_cast<std::size_t>(ssize) };
+    if (pdata != nullptr)
+        return { pdata, static_cast<std::size_t>(ssize) };
+    return {};
 }
 
 } // namespace
