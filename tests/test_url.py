@@ -4,23 +4,34 @@ from upa_url import URL, URLSearchParams
 
 class TestURL(unittest.TestCase):
 
-    # canParse, parse, construct
+    def test_construct(self):
+        u = URL('ws://h')
+        self.assertEqual(u.href, 'ws://h/')
+        u = URL('ws://h', None)
+        self.assertEqual(u.href, 'ws://h/')
+        u = URL('p', 'ws://h')
+        self.assertEqual(u.href, 'ws://h/p')
+
+    def test_construct_fails(self):
+        self.assertRaises(RuntimeError, URL, 'ws://h:p')
+
+    # canParse, parse
     def test_parse(self):
-        input = '/upa-url/upa'
-        baseUrl = 'https://github.com/any'
-        expected = 'https://github.com/upa-url/upa'
-        self.assertTrue(URL.canParse(input, baseUrl))
-        u = URL.parse(input, baseUrl)
-        self.assertEqual(u.href, expected)
-        u = URL(input, baseUrl)
-        self.assertEqual(u.href, expected)
+        u = URL.parse('ws://h')
+        self.assertEqual(u.href, 'ws://h/')
+        self.assertTrue(URL.canParse('ws://h'))
+        u = URL.parse('ws://h', None)
+        self.assertEqual(u.href, 'ws://h/')
+        self.assertTrue(URL.canParse('ws://h', None))
+        u = URL.parse('p', 'ws://h')
+        self.assertEqual(u.href, 'ws://h/p')
+        self.assertTrue(URL.canParse('p', 'ws://h'))
 
     def test_parse_fails(self):
         input = 'https://^^^/'
-        self.assertFalse(URL.canParse(input))
         u = URL.parse(input)
         self.assertIsNone(u)
-        self.assertRaises(RuntimeError, URL, input)
+        self.assertFalse(URL.canParse(input))
 
     def test_copy(self):
         a = URL("ws://h/")

@@ -37,8 +37,12 @@ NB_MODULE(upa_url, m) {
 
     // URL class
     nb::class_<upa::url>(m, "URL")
-        .def(nb::init<std::string_view>(), nb::arg("url"))
-        .def(nb::init<std::string_view, std::string_view>(), nb::arg("url"), nb::arg("base"))
+        .def("__init__", [](upa::url* t, std::string_view url, std::optional<std::string_view> base) {
+                if (base)
+                    new (t) upa::url(url, *base);
+                else
+                    new (t) upa::url(url);
+            }, nb::arg("url"), nb::arg("base") = nb::none())
         .def("__copy__", [](const upa::url& self) {
                 return upa::url(self);
             })
