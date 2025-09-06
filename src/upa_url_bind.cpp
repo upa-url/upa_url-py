@@ -43,6 +43,7 @@ NB_MODULE(upa_url, m) {
                 else
                     new (t) upa::url(url);
             }, nb::arg("url"), nb::arg("base") = nb::none())
+        .def(nb::init<std::string_view, const upa::url&>(), nb::arg("url"), nb::arg("base"))
         .def("__copy__", [](const upa::url& self) {
                 return upa::url(self);
             })
@@ -70,6 +71,9 @@ NB_MODULE(upa_url, m) {
                     return upa::url::can_parse(url, *base);
                 return upa::url::can_parse(url);
             }, nb::arg("url"), nb::arg("base") = nb::none())
+        .def_static("canParse", [](std::string_view url, const upa::url& base) {
+                return upa::url::can_parse(url, base);
+            }, nb::arg("url"), nb::arg("base"))
         .def_static("parse", [](std::string_view url, std::optional<std::string_view> base)
             -> std::optional<upa::url> {
                 upa::url u;
@@ -82,6 +86,13 @@ NB_MODULE(upa_url, m) {
                 }
                 return std::nullopt;
             }, nb::arg("url"), nb::arg("base") = nb::none())
+        .def_static("parse", [](std::string_view url, const upa::url& base)
+            -> std::optional<upa::url> {
+                upa::url u;
+                if (upa::success(u.parse(url, base)))
+                    return u;
+                return std::nullopt;
+            }, nb::arg("url"), nb::arg("base"))
         ;
 
     // URLSearchParams class

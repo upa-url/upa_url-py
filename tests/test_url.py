@@ -11,6 +11,10 @@ class TestURL(unittest.TestCase):
         self.assertEqual(u.href, 'ws://h/')
         u = URL('p', 'ws://h')
         self.assertEqual(u.href, 'ws://h/p')
+        # base - URL object
+        base = URL('ws://h')
+        u = URL('p', base)
+        self.assertEqual(u.href, 'ws://h/p')
 
     def test_construct_fails(self):
         self.assertRaises(RuntimeError, URL, 'ws://h:p')
@@ -26,6 +30,11 @@ class TestURL(unittest.TestCase):
         u = URL.parse('p', 'ws://h')
         self.assertEqual(u.href, 'ws://h/p')
         self.assertTrue(URL.canParse('p', 'ws://h'))
+        # base - URL object
+        base = URL.parse('ws://h')
+        u = URL.parse('p', base)
+        self.assertEqual(u.href, 'ws://h/p')
+        self.assertTrue(URL.canParse('p', base))
 
     def test_parse_fails(self):
         input = 'https://^^^/'
