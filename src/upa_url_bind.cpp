@@ -33,7 +33,7 @@ inline std::string_view to_string_view(nb::str str) {
 NB_MODULE(upa_url, m) {
     m.doc() = "upa_url module";
 
-    m.attr("__version__") = "0.0.1";
+    m.attr("__version__") = "0.0.2";
 
     // URL class
     nb::class_<upa::url>(m, "URL")
