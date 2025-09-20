@@ -1190,10 +1190,10 @@ operator^=(E& lhs, E rhs) noexcept {
 // NOLINTBEGIN(*-macro-*)
 
 #define UPA_IDNA_VERSION_MAJOR 2
-#define UPA_IDNA_VERSION_MINOR 3
+#define UPA_IDNA_VERSION_MINOR 4
 #define UPA_IDNA_VERSION_PATCH 0
 
-#define UPA_IDNA_VERSION "2.3.0"
+#define UPA_IDNA_VERSION "2.4.0"
 
 // NOLINTEND(*-macro-*)
 
@@ -1354,7 +1354,7 @@ inline bool domain_to_unicode(std::u32string& domain, const CharT* input, const 
 /// @return encoded Unicode version
 /// @see make_unicode_version
 [[nodiscard]] inline unsigned unicode_version() {
-    return make_unicode_version(16);
+    return make_unicode_version(17);
 }
 
 
@@ -3794,10 +3794,10 @@ inline void swap(url_search_params& lhs, url_search_params& rhs) noexcept {
 // NOLINTBEGIN(*-macro-*)
 
 #define UPA_URL_VERSION_MAJOR 2
-#define UPA_URL_VERSION_MINOR 2
+#define UPA_URL_VERSION_MINOR 3
 #define UPA_URL_VERSION_PATCH 0
 
-#define UPA_URL_VERSION "2.2.0"
+#define UPA_URL_VERSION "2.3.0"
 
 /// @brief Encode version to one number
 #define UPA_MAKE_VERSION_NUM(n1, n2, n3) ((n1) << 16 | (n2) << 8 | (n3))
@@ -5025,12 +5025,12 @@ inline string_view url::port() const {
 
 inline int url::port_int() const {
     const auto vport = get_part_view(PORT);
-    return vport.length() ? detail::port_from_str(vport.data(), vport.data() + vport.length()) : -1;
+    return !vport.empty() ? detail::port_from_str(vport.data(), vport.data() + vport.length()) : -1;
 }
 
 inline int url::real_port_int() const {
     const auto vport = get_part_view(PORT);
-    if (vport.length())
+    if (!vport.empty())
         return detail::port_from_str(vport.data(), vport.data() + vport.length());
     return scheme_inf_ ? scheme_inf_->default_port : -1;
 }
@@ -6303,7 +6303,7 @@ inline void url_parser::do_opaque_path(const CharT* pointer, const CharT* last, 
 
 inline string_view url::get_path_first_string(std::size_t len) const {
     string_view pathv = get_part_view(PATH);
-    if (pathv.length() == 0 || has_opaque_path())
+    if (pathv.empty() || has_opaque_path())
         return pathv;
     // skip '/'
     pathv.remove_prefix(1);
