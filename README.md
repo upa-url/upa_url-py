@@ -14,7 +14,7 @@ If the binary wheel is not available for your platform, then you will need a C++
 
 ## Getting started
 
-First you need import classes:
+First, you need to import classes:
 ```python
 from upa_url import URL, URLSearchParams
 ```
@@ -24,7 +24,7 @@ from upa_url import URL, URLSearchParams
 The `URL` class provides a structured way to parse, manipulate, and serialize URLs.
 
 An URL can be parsed using one of two methods:
-1. Use `URL` constructor. It throws an exception on error:
+1. Use the `URL` constructor. It throws an exception on error:
    ```python
    try:
        url = URL('https://upa-url.github.io/docs/')
@@ -32,13 +32,13 @@ An URL can be parsed using one of two methods:
    except Exception:
        print('URL parse error')
    ```
-2. Use `URL.parse` fucntion. It returns `None` on error:
+2. Use the `URL.parse` fucntion. It returns `None` on error:
    ```python
    url = URL.parse('docs', 'https://upa-url.github.io')
    if url is not None:
        print(url.href)
    ```
-The parsed URL object components can be accessed using getters and setters: `href`, `origin` (only get value), `protocol`, `username`, `password`, `host`, `hostname`, `port`, `pathname`, `search` and `hash`. Also you can get and change search parameters using `searchParams` getter which returns `URLSearchParams` object associated with URL:
+The components of the parsed URL object can be accessed using getters and setters: `href`, `origin` (only get value), `protocol`, `username`, `password`, `host`, `hostname`, `port`, `pathname`, `search` and `hash`. You can also get and change the search parameters using the `searchParams` getter, which returns the `URLSearchParams` object associated with the URL:
 ```python
 url = URL.parse('https://example.org')
 if url is not None:
@@ -46,9 +46,9 @@ if url is not None:
     print(url.href) # https://example.org/?lang=lt
 ```
 
-To serialize parsed URL use `url.href` or `str(url)`.
+To serialize a parsed URL, use either `url.href` or `str(url)`.
 
-If you need only check URL validity, then `URL.canParse` function can be used:
+If you only need to check URL validity, then the `URL.canParse` function can be used:
 ```python
 if URL.canParse('docs', 'https://upa-url.github.io'):
     print('URL is valid')
@@ -58,10 +58,10 @@ if URL.canParse('docs', 'https://upa-url.github.io'):
 
 The `URLSearchParams` class provides a structured way to parse, manipulate, and serialize the query string of a URL.
 
-An `URLSearchParams` object can be created by using constructor:
+An `URLSearchParams` object can be created by using a constructor:
 1. To create empty: `params = URLSearchParams()`
-2. Create from string: `params = URLSearchParams('lang=lt&id=123')`
-3. Create from dictionary or list:
+2. Create from a string: `params = URLSearchParams('lang=lt&id=123')`
+3. Create from a dictionary or a list:
    ```python
    params1 = URLSearchParams({'lang': 'lt', 'id': '123'})
    params2 = URLSearchParams([('lang', 'lt'), ['id', '123']])
@@ -84,7 +84,7 @@ print(params.has('c'))      # False
 Iterate over all parameters:
 ```python
 params = URLSearchParams('a=1&b=2')
-# Get all name - value pairs:
+# Get all name-value pairs:
 for name, value in params:
     print(name, '=', value)
 # Get all parameter names
@@ -101,7 +101,7 @@ print(params.size) # 2
 print(len(params)) # 2
 ```
 
-To serialize `URLSearchParams` object use `str(params)`.
+To serialize a `URLSearchParams` object, use `str(params)`.
 
 There are functions to manipulate search parameters:
 1. Add or replace parameters:
