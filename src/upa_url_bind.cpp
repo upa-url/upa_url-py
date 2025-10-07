@@ -4,6 +4,7 @@
 //
 
 #include "upa/url.h"
+#include "upa/public_suffix_list.h"
 #include <nanobind/nanobind.h>
 #include <nanobind/make_iterator.h>
 #include <nanobind/stl/list.h>
@@ -26,6 +27,10 @@ inline std::string_view to_string_view(nb::str str) {
     if (pdata != nullptr)
         return { pdata, static_cast<std::size_t>(ssize) };
     return {};
+}
+
+inline nb::str to_str(std::string_view sv) {
+    return nb::str{ sv.data(), sv.length() };
 }
 
 } // namespace
@@ -173,5 +178,44 @@ NB_MODULE(upa_url, m) {
                     "iterator", self.begin(), self.end());
             }, nb::keep_alive<0, 1>())
         .def("__str__", &upa::url_search_params::to_string)
+        ;
+
+    // PSL class
+    nb::class_<upa::public_suffix_list>(m, "PSL")
+        // Load Public Suffix List from file
+        .def_static("load", [](std::string_view filename)
+            -> std::optional<upa::public_suffix_list> {
+                upa::public_suffix_list psl;
+                if (psl.load(filename))
+                    return psl;
+                return std::nullopt;
+            }, nb::arg("filename"))
+        // Get public suffix
+        .def("public_suffix", [](const upa::public_suffix_list& self,
+            std::string_view str_host, bool ascii) {
+                if (ascii) {
+                    return to_str(self.get_suffix(str_host));
+                }
+                return to_str(self.get_suffix_view(str_host));
+            }, nb::arg("host"), nb::arg("ascii") = true)
+        .def("public_suffix", [](const upa::public_suffix_list& self,
+            const upa::url& url) {
+                return self.get_suffix_view(url);
+            }, nb::arg("url"))
+        // Get registrable domain
+        .def("registrable_domain", [](const upa::public_suffix_list& self,
+            std::string_view str_host, bool ascii) {
+                if (ascii) {
+                    return to_str(self.get_suffix(str_host,
+                        upa::public_suffix_list::option::registrable_domain));
+                }
+                return to_str(self.get_suffix_view(str_host,
+                    upa::public_suffix_list::option::registrable_domain));
+            }, nb::arg("host"), nb::arg("ascii") = true)
+        .def("registrable_domain", [](const upa::public_suffix_list& self,
+            const upa::url& url) {
+                return self.get_suffix_view(url,
+                    upa::public_suffix_list::option::registrable_domain);
+            }, nb::arg("url"))
         ;
 }

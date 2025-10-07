@@ -41,7 +41,8 @@ nanobind_add_module(
 
   # Source code
   src/upa_url_bind.cpp
-  ext/upa/url.cpp)
+  ext/upa/url.cpp
+  ext/upa/public_suffix_list.cpp)
 
 # Install directive for scikit-build-core
 install(TARGETS upa_url LIBRARY DESTINATION upa_url)

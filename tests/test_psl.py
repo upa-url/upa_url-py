@@ -1,0 +1,29 @@
+import os
+import unittest
+from upa_url import PSL, URL
+
+class TestPSL(unittest.TestCase):
+
+    def test_psl(self):
+        # Load list
+        dir = os.path.dirname(os.path.realpath(__file__))
+        psl = PSL.load(os.path.join(dir, 'PSL.dat'))
+        self.assertIsNotNone(psl)
+
+        # URL for tests
+        url = URL('https://upa-url.github.io/')
+
+        # Test public suffix
+        self.assertEqual(psl.public_suffix(url), 'github.io')
+        self.assertEqual(psl.public_suffix('upa-url.github.io.'), 'github.io.')
+        self.assertEqual(psl.public_suffix('ąž'), 'xn--2da6v')
+        self.assertEqual(psl.public_suffix('ąž', ascii=False), 'ąž')
+
+        # Test registrable domain
+        self.assertEqual(psl.registrable_domain(url), 'upa-url.github.io')
+        self.assertEqual(psl.registrable_domain('upa-url.github.io.'), 'upa-url.github.io.')
+        self.assertEqual(psl.registrable_domain('upa.ąž'), 'upa.xn--2da6v')
+        self.assertEqual(psl.registrable_domain('upa.ąž', ascii=False), 'upa.ąž')
+
+if __name__ == '__main__':
+    unittest.main()

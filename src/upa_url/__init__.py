@@ -1,1 +1,1 @@
-from .upa_url import URL, URLSearchParams, __doc__
+from .upa_url import PSL, URL, URLSearchParams, __doc__
