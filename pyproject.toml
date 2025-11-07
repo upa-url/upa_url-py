@@ -44,6 +44,9 @@ sdist.exclude = [ ".*" ]
 # Necessary to see build output from the actual compilation
 build-verbosity = 1
 
+# Enable PyPy
+enable = ["pypy"]
+
 # Run tests to ensure that the package was correctly built
 test-command = "python -m unittest discover -s {project}/tests"
 
