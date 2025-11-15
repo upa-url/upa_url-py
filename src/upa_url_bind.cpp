@@ -33,6 +33,21 @@ inline nb::str to_str(std::string_view sv) {
     return nb::str{ sv.data(), sv.length() };
 }
 
+class public_suffix_list_py : public upa::public_suffix_list {
+public:
+    inline void push_line(std::string_view line) {
+        upa::public_suffix_list::push_line(ctx_, line);
+    }
+    inline void push(std::string_view buff) {
+        upa::public_suffix_list::push(ctx_, buff);
+    }
+    inline bool finalize() {
+        return upa::public_suffix_list::finalize(ctx_);
+    }
+private:
+    push_context ctx_;
+};
+
 } // namespace
 
 NB_MODULE(upa_url, m) {
@@ -181,29 +196,36 @@ NB_MODULE(upa_url, m) {
         ;
 
     // PSL class
-    nb::class_<upa::public_suffix_list>(m, "PSL")
+    nb::class_<public_suffix_list_py>(m, "PSL")
+        // Load Public Suffix List using push interface
+        .def(nb::init<>())
+        .def("push_line", &public_suffix_list_py::push_line, nb::arg("line"))
+        .def("push", &public_suffix_list_py::push, nb::arg("buff"))
+        .def("finalize", &public_suffix_list_py::finalize)
+
         // Load Public Suffix List from file
         .def_static("load", [](std::string_view filename)
-            -> std::optional<upa::public_suffix_list> {
-                upa::public_suffix_list psl;
+            -> std::optional<public_suffix_list_py> {
+                public_suffix_list_py psl;
                 if (psl.load(filename))
                     return psl;
                 return std::nullopt;
             }, nb::arg("filename"))
+
         // Get public suffix
-        .def("public_suffix", [](const upa::public_suffix_list& self,
+        .def("public_suffix", [](const public_suffix_list_py& self,
             std::string_view str_host, bool ascii) {
                 if (ascii) {
                     return to_str(self.get_suffix(str_host));
                 }
                 return to_str(self.get_suffix_view(str_host));
             }, nb::arg("host"), nb::arg("ascii") = true)
-        .def("public_suffix", [](const upa::public_suffix_list& self,
+        .def("public_suffix", [](const public_suffix_list_py& self,
             const upa::url& url) {
                 return self.get_suffix_view(url);
             }, nb::arg("url"))
         // Get registrable domain
-        .def("registrable_domain", [](const upa::public_suffix_list& self,
+        .def("registrable_domain", [](const public_suffix_list_py& self,
             std::string_view str_host, bool ascii) {
                 if (ascii) {
                     return to_str(self.get_suffix(str_host,
@@ -212,7 +234,7 @@ NB_MODULE(upa_url, m) {
                 return to_str(self.get_suffix_view(str_host,
                     upa::public_suffix_list::option::registrable_domain));
             }, nb::arg("host"), nb::arg("ascii") = true)
-        .def("registrable_domain", [](const upa::public_suffix_list& self,
+        .def("registrable_domain", [](const public_suffix_list_py& self,
             const upa::url& url) {
                 return self.get_suffix_view(url,
                     upa::public_suffix_list::option::registrable_domain);

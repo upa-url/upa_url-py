@@ -4,6 +4,27 @@ from upa_url import PSL, URL
 
 class TestPSL(unittest.TestCase):
 
+    def test_psl_push(self):
+        # push_line
+        psl = PSL()
+        psl.push_line('github.io')
+        self.assertTrue(psl.finalize())
+        self.assertEqual(psl.public_suffix('upa-url.github.io'), 'github.io')
+        self.assertEqual(psl.public_suffix('abc.io'), 'io')
+
+        # push
+        psl = PSL()
+        psl.push('githu')
+        psl.push('b.io')
+        self.assertTrue(psl.finalize())
+        self.assertEqual(psl.public_suffix('upa-url.github.io.'), 'github.io.')
+        self.assertEqual(psl.public_suffix('abc.io.'), 'io.')
+
+        # push error
+        psl = PSL()
+        psl.push('^.com')
+        self.assertFalse(psl.finalize())
+
     def test_psl(self):
         # Load list
         dir = os.path.dirname(os.path.realpath(__file__))
