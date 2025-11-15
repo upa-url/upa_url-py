@@ -256,6 +256,24 @@ private:
 # define UPA_API
 #endif
 
+// Attributes
+
+// NOLINTBEGIN(*-macro-*)
+
+#ifdef __has_cpp_attribute
+# define UPA_HAS_CPP_ATTRIBUTE(x) __has_cpp_attribute(x)
+#else
+# define UPA_HAS_CPP_ATTRIBUTE(x) 0
+#endif
+
+// NOLINTEND(*-macro-*)
+
+#if UPA_HAS_CPP_ATTRIBUTE(clang::lifetimebound)
+# define UPA_LIFETIMEBOUND [[clang::lifetimebound]]
+#else
+# define UPA_LIFETIMEBOUND
+#endif
+
 // Barrier for pointer anti-aliasing optimizations even across function boundaries.
 // This is a slightly modified U_ALIASING_BARRIER macro from the char16ptr.h file
 // of the ICU 75.1 library.
@@ -271,7 +289,7 @@ private:
 #endif // UPA_CONFIG_H
              // IWYU pragma: export
 // #include "str_arg.h"
-// Copyright 2016-2024 Rimas Misevičius
+// Copyright 2016-2025 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -713,6 +731,212 @@ inline void url_utf::append_utf16(uint32_t code_point, Output& output) {
 
 #endif // UPA_URL_UTF_H
 
+// #include "util.h"
+// Copyright 2016-2025 Rimas Misevičius
+// Distributed under the BSD-style license that can be
+// found in the LICENSE file.
+//
+
+#ifndef UPA_UTIL_H
+#define UPA_UTIL_H
+
+// #include "config.h"
+
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <limits>
+#ifdef __cpp_lib_start_lifetime_as
+# include <memory>
+#endif
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+
+namespace upa::util {
+
+// For use in static_assert, workaround before CWG2518/P2593R1
+
+template<class>
+constexpr bool false_v = false;
+
+// Integers
+
+// Some functions here use unsigned arithmetics with unsigned overflow intentionally.
+// So unsigned-integer-overflow checks are disabled for these functions in the Clang
+// UndefinedBehaviorSanitizer (UBSan) with
+// __attribute__((no_sanitize("unsigned-integer-overflow"))).
+
+// Utility class to get unsigned (abs) max, min values of (signed) integer type
+template <typename T, typename UT = std::make_unsigned_t<T>>
+struct unsigned_limit {
+    static constexpr UT max() noexcept {
+        return static_cast<UT>(std::numeric_limits<T>::max());
+    }
+
+#if defined(__clang__)
+    __attribute__((no_sanitize("unsigned-integer-overflow")))
+#endif
+    static constexpr UT min() noexcept {
+        // http://en.cppreference.com/w/cpp/language/implicit_conversion
+        // Integral conversions: If the destination type is unsigned, the resulting
+        // value is the smallest unsigned value equal to the source value modulo 2^n
+        // where n is the number of bits used to represent the destination type.
+        // https://en.wikipedia.org/wiki/Modular_arithmetic#Congruence
+        return static_cast<UT>(0) - static_cast<UT>(std::numeric_limits<T>::min());
+    }
+};
+
+// Returns difference between a and b (a - b), if result is not representable
+// by the type Out - throws exception.
+template <typename Out, typename T,
+    typename UT = std::make_unsigned_t<T>,
+    std::enable_if_t<std::is_integral_v<T>, int> = 0>
+#if defined(__clang__)
+__attribute__((no_sanitize("unsigned-integer-overflow")))
+#endif
+constexpr Out checked_diff(T a, T b) {
+    if (a >= b) {
+        const UT diff = static_cast<UT>(static_cast<UT>(a) - static_cast<UT>(b));
+        if (diff <= unsigned_limit<Out>::max())
+            return static_cast<Out>(diff);
+    } else if constexpr (std::is_signed_v<Out>) {
+        // b > a ==> diff >= 1
+        const UT diff = static_cast<UT>(static_cast<UT>(b) - static_cast<UT>(a));
+        if (diff <= unsigned_limit<Out>::min())
+            return static_cast<Out>(0) - static_cast<Out>(diff - 1) - 1;
+    }
+    throw std::length_error("too big difference");
+}
+
+// Cast integer value to corresponding unsigned type
+
+template <typename T, typename UT = std::make_unsigned_t<T>>
+constexpr auto to_unsigned(T n) noexcept -> UT {
+    return static_cast<UT>(n);
+}
+
+// Append unsigned integer to string
+
+template <typename UIntT>
+inline void unsigned_to_str(UIntT num, std::string& output, UIntT base) {
+    static const char digit[] = "0123456789abcdef";
+
+    // count digits
+    std::size_t count = output.length() + 1;
+    // one division is needed to prevent the multiplication overflow
+    const UIntT num0 = num / base;
+    for (UIntT divider = 1; divider <= num0; divider *= base)
+        ++count;
+    output.resize(count);
+
+    // convert
+    do {
+        output[--count] = digit[num % base];
+        num /= base;
+    } while (num);
+}
+
+// Convert any char type string to std::basic_string_view
+
+template <typename T, typename SizeT>
+constexpr std::basic_string_view<T> to_string_view(const T* str, SizeT length) {
+    assert(length >= 0);
+    return { str, static_cast<std::size_t>(length) };
+}
+
+template <typename T, typename CharT, typename SizeT,
+    std::enable_if_t<!std::is_same_v<T, CharT> && sizeof(T) == sizeof(CharT), int> = 0>
+inline std::basic_string_view<T> to_string_view(const CharT* src, SizeT length) {
+    assert(length >= 0);
+    const auto size = static_cast<std::size_t>(length);
+#ifdef __cpp_lib_start_lifetime_as
+    const T* str = std::start_lifetime_as_array<T>(src, size);
+#else
+    UPA_ALIASING_BARRIER(src)
+    const T* str = reinterpret_cast<const T*>(src);
+#endif
+    return { str, size };
+}
+
+// Append data to string
+
+constexpr std::size_t add_sizes(std::size_t size1, std::size_t size2, std::size_t max_size) {
+    if (max_size - size1 < size2)
+        throw std::length_error("too big size");
+    // now it is safe to add sizes
+    return size1 + size2;
+}
+
+template <class CharT, class StrT>
+inline void append(std::basic_string<CharT>& dest, const StrT& src) {
+#ifdef _MSC_VER
+    if constexpr (!std::is_same_v<typename StrT::value_type, CharT>) {
+        // the value_type of dest and src are different
+        dest.reserve(add_sizes(dest.size(), src.size(), dest.max_size()));
+        for (const auto c : src)
+            dest.push_back(static_cast<CharT>(c));
+    } else
+#endif
+    dest.append(src.begin(), src.end());
+}
+
+template <class CharT, class UnaryOperation>
+inline void append_tr(std::string& dest, const CharT* first, const CharT* last, UnaryOperation unary_op) {
+    const std::size_t old_size = dest.size();
+    const std::size_t src_size = last - first;
+    const std::size_t new_size = add_sizes(old_size, src_size, dest.max_size());
+
+#ifdef __cpp_lib_string_resize_and_overwrite
+    dest.resize_and_overwrite(new_size, [&](char* buff, std::size_t) {
+        std::transform(first, last, buff + old_size, unary_op);
+        return new_size;
+    });
+#else
+    dest.resize(new_size);
+    std::transform(first, last, dest.data() + old_size, unary_op);
+#endif
+}
+
+template <typename CharT>
+constexpr char ascii_to_lower_char(CharT c) noexcept {
+    return static_cast<char>((c <= 'Z' && c >= 'A') ? (c | 0x20) : c);
+}
+
+template <class CharT>
+inline void append_ascii_lowercase(std::string& dest, const CharT* first, const CharT* last) {
+    util::append_tr(dest, first, last, ascii_to_lower_char<CharT>);
+}
+
+// Finders
+
+template <class InputIt>
+inline bool contains_null(InputIt first, InputIt last) {
+    return std::find(first, last, '\0') != last;
+}
+
+template <class CharT>
+constexpr bool has_xn_label(const CharT* first, const CharT* last) {
+    if (last - first >= 4) {
+        // search for labels starting with "xn--"
+        const auto end = last - 4;
+        for (auto p = first; ; ++p) { // skip '.'
+            // "XN--", "xn--", ...
+            if ((p[0] | 0x20) == 'x' && (p[1] | 0x20) == 'n' && p[2] == '-' && p[3] == '-')
+                return true;
+            p = std::char_traits<CharT>::find(p, end - p, '.');
+            if (p == nullptr) break;
+        }
+    }
+    return false;
+}
+
+
+} // namespace upa::util
+
+#endif // UPA_UTIL_H
+
 #include <cassert>
 #include <cstddef>
 #include <string>
@@ -752,40 +976,32 @@ constexpr bool is_derived_from_v =
 
 // string args helper class
 
-template <typename CharT>
+template <typename T>
 class str_arg {
 public:
-    using input_type = CharT;
-    using traits_type = std::char_traits<input_type>;
     // output value type
     using value_type =
-        // wchar_t type will be converted to char16_t or char32_t type equivalent by size
-        std::conditional_t<std::is_same_v<CharT, wchar_t>, std::conditional_t<sizeof(wchar_t) == sizeof(char16_t), char16_t, char32_t>,
-#ifdef __cpp_char8_t
-        // char8_t type will be converted to char type
-        std::conditional_t<std::is_same_v<CharT, char8_t>, char, input_type>
-#else
-        input_type
-#endif
-        >;
+        // char, char8_t
+        std::conditional_t<sizeof(T) == sizeof(char), char,
+        // char16_t, char32_t, wchar_t
+        std::conditional_t<sizeof(T) == sizeof(char16_t), char16_t,
+        std::conditional_t<sizeof(T) == sizeof(char32_t), char32_t,
+        T>>>;
 
     // constructors
     constexpr str_arg(const str_arg&) noexcept = default;
 
-    constexpr str_arg(const CharT* s)
-        : first_(s)
-        , last_(s + traits_type::length(s))
+    template <typename CharT, typename SizeT,
+        std::enable_if_t<sizeof(CharT) == sizeof(value_type), int> = 0,
+        std::enable_if_t<is_size_type_v<SizeT>, int> = 0>
+    constexpr str_arg(const CharT* s, SizeT length)
+        : str_arg{ util::to_string_view<value_type>(s, length) }
     {}
 
-    template <typename SizeT, std::enable_if_t<is_size_type_v<SizeT>, int> = 0>
-    constexpr str_arg(const CharT* s, SizeT length)
-        : first_(s)
-        , last_(s + length)
-    { assert(length >= 0); }
-
+    template <typename CharT,
+        std::enable_if_t<sizeof(CharT) == sizeof(value_type), int> = 0>
     constexpr str_arg(const CharT* first, const CharT* last)
-        : first_(first)
-        , last_(last)
+        : str_arg{ util::to_string_view<value_type>(first, last - first) }
     { assert(first <= last); }
 
     // destructor
@@ -796,26 +1012,34 @@ public:
 
     // output
     constexpr const value_type* begin() const noexcept {
-        return reinterpret_cast<const value_type*>(first_);
+        return first_;
     }
     constexpr const value_type* end() const noexcept {
-        return reinterpret_cast<const value_type*>(last_);
+        return last_;
     }
     constexpr const value_type* data() const noexcept {
-        return begin();
+        return first_;
     }
     constexpr std::size_t length() const noexcept {
-        return end() - begin();
+        return last_ - first_;
     }
     constexpr std::size_t size() const noexcept {
         return length();
     }
 
 private:
-    const input_type* first_;
-    const input_type* last_;
+    constexpr str_arg(std::basic_string_view<value_type> sv)
+        : first_{ sv.data() }
+        , last_{ sv.data() + sv.size() }
+    {}
+
+    const value_type* first_;
+    const value_type* last_;
 };
 
+// str_arg deduction guide
+template <typename CharT, typename T>
+str_arg(const CharT*, T) -> str_arg<CharT>;
 
 // String type helpers
 
@@ -827,42 +1051,25 @@ using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
 namespace detail {
 
-// See: https://stackoverflow.com/a/9154394
-
-// test class T has data() member
-template<class T>
-auto test_data(int) -> decltype(std::declval<T>().data());
-template<class>
-auto test_data(long) -> void;
-
-// test class T has size() member
-template<class T>
-auto test_size(int) -> decltype(std::declval<T>().size());
-template<class>
-auto test_size(long) -> void;
-
-// T::data() return type (void - if no such member)
-template<class T>
-using data_member_t = decltype(detail::test_data<T>(0));
-
-// T::size() return type (void - if no such member)
-template<class T>
-using size_member_t = decltype(detail::test_size<T>(0));
-
 // Check that StrT has data() and size() members of supported types
 
+template<class StrT, typename = void>
+constexpr bool has_data_and_size_v = false;
+
 template<class StrT>
-constexpr bool has_data_and_size_v =
-    std::is_pointer_v<detail::data_member_t<StrT>> &&
-    is_char_type_v<remove_cvptr_t<detail::data_member_t<StrT>>> &&
-    is_size_type_v<detail::size_member_t<StrT>>;
+constexpr bool has_data_and_size_v<StrT, std::void_t<
+    decltype(std::declval<StrT>().data()),
+    decltype(std::declval<StrT>().size())>> =
+    // check members types
+    std::is_pointer_v<decltype(std::declval<StrT>().data())> &&
+    is_char_type_v<remove_cvptr_t<decltype(std::declval<StrT>().data())>> &&
+    is_size_type_v<decltype(std::declval<StrT>().size())>;
 
 // Check StrT is convertible to std::basic_string_view
 
 template<class StrT, typename CharT>
 constexpr bool convertible_to_string_view_v =
     std::is_convertible_v<StrT, std::basic_string_view<CharT>> &&
-    !has_data_and_size_v<StrT> &&
     !std::is_same_v<StrT, std::nullptr_t>;
 
 // Common class for converting input to str_arg
@@ -875,18 +1082,22 @@ struct str_arg_char_common {
     }
 };
 
+// StrT has data() and size() members
+
+template<class StrT, typename = void>
+struct str_arg_char_data_size {};
+
+template<class StrT>
+struct str_arg_char_data_size<StrT, std::enable_if_t<
+    has_data_and_size_v<StrT>>>
+    : str_arg_char_common<
+    remove_cvptr_t<decltype(std::declval<StrT>().data())>,
+    remove_cvref_t<StrT> const&> {};
+
 // Default str_arg_char implementation
 
 template<class StrT, typename = void>
-struct str_arg_char_default {};
-
-// StrT has data() and size() members
-template<class StrT>
-struct str_arg_char_default<StrT, std::enable_if_t<
-    has_data_and_size_v<StrT>>>
-    : str_arg_char_common<
-    remove_cvptr_t<detail::data_member_t<StrT>>,
-    remove_cvref_t<StrT> const&> {};
+struct str_arg_char_default : str_arg_char_data_size<StrT> {};
 
 // StrT is convertible to std::basic_string_view
 template<class StrT>
@@ -897,7 +1108,8 @@ struct str_arg_char_default<StrT, std::enable_if_t<
 #ifdef __cpp_char8_t
 template<class StrT>
 struct str_arg_char_default<StrT, std::enable_if_t<
-    convertible_to_string_view_v<StrT, char8_t>>>
+    convertible_to_string_view_v<StrT, char8_t> &&
+    !convertible_to_string_view_v<StrT, char>>>
     : str_arg_char_common<char8_t, std::basic_string_view<char8_t>> {};
 #endif
 
@@ -913,7 +1125,9 @@ struct str_arg_char_default<StrT, std::enable_if_t<
 
 template<class StrT>
 struct str_arg_char_default<StrT, std::enable_if_t<
-    convertible_to_string_view_v<StrT, wchar_t>>>
+    convertible_to_string_view_v<StrT, wchar_t> &&
+    !convertible_to_string_view_v<StrT, char16_t> &&
+    !convertible_to_string_view_v<StrT, char32_t>>>
     : str_arg_char_common<wchar_t, std::basic_string_view<wchar_t>> {};
 
 } // namespace detail
@@ -928,8 +1142,8 @@ struct str_arg_char : detail::str_arg_char_default<StrT> {};
 template<class CharT>
 struct str_arg_char<CharT*, std::enable_if_t<is_char_type_v<remove_cvref_t<CharT>>>> {
     using type = remove_cvref_t<CharT>;
-    static constexpr str_arg<type> to_str_arg(const type* s) {
-        return s;
+    static constexpr str_arg<type> to_str_arg(const type* sz) {
+        return { sz, std::char_traits<type>::length(sz) };
     }
 };
 
@@ -1452,183 +1666,6 @@ UPA_IDNA_API status decode(std::u32string& output, const char32_t* first, const 
 // #include "url_utf.h"
 
 // #include "util.h"
-// Copyright 2016-2025 Rimas Misevičius
-// Distributed under the BSD-style license that can be
-// found in the LICENSE file.
-//
-
-#ifndef UPA_UTIL_H
-#define UPA_UTIL_H
-
-// #include "config.h"
-
-#include <algorithm>
-#include <cstddef>
-#include <limits>
-#include <stdexcept>
-#include <string>
-#include <type_traits>
-
-namespace upa::util {
-
-// For use in static_assert, workaround before CWG2518/P2593R1
-
-template<class>
-constexpr bool false_v = false;
-
-// Integers
-
-// Some functions here use unsigned arithmetics with unsigned overflow intentionally.
-// So unsigned-integer-overflow checks are disabled for these functions in the Clang
-// UndefinedBehaviorSanitizer (UBSan) with
-// __attribute__((no_sanitize("unsigned-integer-overflow"))).
-
-// Utility class to get unsigned (abs) max, min values of (signed) integer type
-template <typename T, typename UT = std::make_unsigned_t<T>>
-struct unsigned_limit {
-    static constexpr UT max() noexcept {
-        return static_cast<UT>(std::numeric_limits<T>::max());
-    }
-
-#if defined(__clang__)
-    __attribute__((no_sanitize("unsigned-integer-overflow")))
-#endif
-    static constexpr UT min() noexcept {
-        // http://en.cppreference.com/w/cpp/language/implicit_conversion
-        // Integral conversions: If the destination type is unsigned, the resulting
-        // value is the smallest unsigned value equal to the source value modulo 2^n
-        // where n is the number of bits used to represent the destination type.
-        // https://en.wikipedia.org/wiki/Modular_arithmetic#Congruence
-        return static_cast<UT>(0) - static_cast<UT>(std::numeric_limits<T>::min());
-    }
-};
-
-// Returns difference between a and b (a - b), if result is not representable
-// by the type Out - throws exception.
-template <typename Out, typename T,
-    typename UT = std::make_unsigned_t<T>,
-    std::enable_if_t<std::is_integral_v<T>, int> = 0>
-#if defined(__clang__)
-__attribute__((no_sanitize("unsigned-integer-overflow")))
-#endif
-constexpr Out checked_diff(T a, T b) {
-    if (a >= b) {
-        const UT diff = static_cast<UT>(static_cast<UT>(a) - static_cast<UT>(b));
-        if (diff <= unsigned_limit<Out>::max())
-            return static_cast<Out>(diff);
-    } else if constexpr (std::is_signed_v<Out>) {
-        // b > a ==> diff >= 1
-        const UT diff = static_cast<UT>(static_cast<UT>(b) - static_cast<UT>(a));
-        if (diff <= unsigned_limit<Out>::min())
-            return static_cast<Out>(0) - static_cast<Out>(diff - 1) - 1;
-    }
-    throw std::length_error("too big difference");
-}
-
-// Cast integer value to corresponding unsigned type
-
-template <typename T, typename UT = std::make_unsigned_t<T>>
-constexpr auto to_unsigned(T n) noexcept -> UT {
-    return static_cast<UT>(n);
-}
-
-// Append unsigned integer to string
-
-template <typename UIntT>
-inline void unsigned_to_str(UIntT num, std::string& output, UIntT base) {
-    static const char digit[] = "0123456789abcdef";
-
-    // count digits
-    std::size_t count = output.length() + 1;
-    // one division is needed to prevent the multiplication overflow
-    const UIntT num0 = num / base;
-    for (UIntT divider = 1; divider <= num0; divider *= base)
-        ++count;
-    output.resize(count);
-
-    // convert
-    do {
-        output[--count] = digit[num % base];
-        num /= base;
-    } while (num);
-}
-
-// Append data to string
-
-constexpr std::size_t add_sizes(std::size_t size1, std::size_t size2, std::size_t max_size) {
-    if (max_size - size1 < size2)
-        throw std::length_error("too big size");
-    // now it is safe to add sizes
-    return size1 + size2;
-}
-
-template <class CharT, class StrT>
-inline void append(std::basic_string<CharT>& dest, const StrT& src) {
-#ifdef _MSC_VER
-    if constexpr (!std::is_same_v<typename StrT::value_type, CharT>) {
-        // the value_type of dest and src are different
-        dest.reserve(add_sizes(dest.size(), src.size(), dest.max_size()));
-        for (const auto c : src)
-            dest.push_back(static_cast<CharT>(c));
-    } else
-#endif
-    dest.append(src.begin(), src.end());
-}
-
-template <class CharT, class UnaryOperation>
-inline void append_tr(std::string& dest, const CharT* first, const CharT* last, UnaryOperation unary_op) {
-    const std::size_t old_size = dest.size();
-    const std::size_t src_size = last - first;
-    const std::size_t new_size = add_sizes(old_size, src_size, dest.max_size());
-
-#ifdef __cpp_lib_string_resize_and_overwrite
-    dest.resize_and_overwrite(new_size, [&](char* buff, std::size_t) {
-        std::transform(first, last, buff + old_size, unary_op);
-        return new_size;
-    });
-#else
-    dest.resize(new_size);
-    std::transform(first, last, dest.data() + old_size, unary_op);
-#endif
-}
-
-template <typename CharT>
-constexpr char ascii_to_lower_char(CharT c) noexcept {
-    return static_cast<char>((c <= 'Z' && c >= 'A') ? (c | 0x20) : c);
-}
-
-template <class CharT>
-inline void append_ascii_lowercase(std::string& dest, const CharT* first, const CharT* last) {
-    util::append_tr(dest, first, last, ascii_to_lower_char<CharT>);
-}
-
-// Finders
-
-template <class InputIt>
-inline bool contains_null(InputIt first, InputIt last) {
-    return std::find(first, last, '\0') != last;
-}
-
-template <class CharT>
-constexpr bool has_xn_label(const CharT* first, const CharT* last) {
-    if (last - first >= 4) {
-        // search for labels starting with "xn--"
-        const auto end = last - 4;
-        for (auto p = first; ; ++p) { // skip '.'
-            // "XN--", "xn--", ...
-            if ((p[0] | 0x20) == 'x' && (p[1] | 0x20) == 'n' && p[2] == '-' && p[3] == '-')
-                return true;
-            p = std::char_traits<CharT>::find(p, end - p, '.');
-            if (p == nullptr) break;
-        }
-    }
-    return false;
-}
-
-
-} // namespace upa::util
-
-#endif // UPA_UTIL_H
 
 #include <array>
 #include <cstdint> // uint8_t
@@ -2669,7 +2706,7 @@ public:
     /// Hostname view
     ///
     /// @return serialized host as string_view
-    [[nodiscard]] string_view name() const {
+    [[nodiscard]] string_view name() const UPA_LIFETIMEBOUND {
         return host_str_;
     }
 
@@ -3012,35 +3049,26 @@ inline validation_errc host_parser::parse_ipv6(const CharT* first, const CharT* 
 
 namespace upa {
 
-
 namespace detail {
 
 // is key value pair
 template <typename>
-struct is_pair : std::false_type {};
+constexpr bool is_pair_v = false;
 
 template<class T1, class T2>
-struct is_pair<std::pair<T1, T2>> : std::true_type {};
+constexpr bool is_pair_v<std::pair<T1, T2>> = true;
 
-// Get iterable's value type
-// https://stackoverflow.com/a/29634934
-template <typename T>
-auto iterable_value(int) -> decltype(
+// is iterable over the std::pair values
+template<class T, typename = void>
+constexpr bool is_iterable_pairs_v = false;
+
+template<class T>
+constexpr bool is_iterable_pairs_v<T, std::void_t<decltype(
+    // https://stackoverflow.com/a/29634934
     std::begin(std::declval<T&>()) != std::end(std::declval<T&>()), // begin/end and operator !=
     ++std::declval<decltype(std::begin(std::declval<T&>()))&>(), // operator ++
     *std::begin(std::declval<T&>()) // operator *
-);
-template <typename T>
-auto iterable_value(long) -> void;
-
-template<class T>
-using iterable_value_t = std::remove_cv_t<std::remove_reference_t<
-    decltype(iterable_value<T>(0))
->>;
-
-// is iterable over the std::pair values
-template<class T>
-constexpr bool is_iterable_pairs_v = is_pair<iterable_value_t<T>>::value;
+    )>> = is_pair_v<remove_cvref_t<decltype(*std::begin(std::declval<T&>()))>>;
 
 // enable if `Base` is not the base class of `T`
 template<class Base, class T>
@@ -3794,10 +3822,10 @@ inline void swap(url_search_params& lhs, url_search_params& rhs) noexcept {
 // NOLINTBEGIN(*-macro-*)
 
 #define UPA_URL_VERSION_MAJOR 2
-#define UPA_URL_VERSION_MINOR 3
+#define UPA_URL_VERSION_MINOR 4
 #define UPA_URL_VERSION_PATCH 0
 
-#define UPA_URL_VERSION "2.3.0"
+#define UPA_URL_VERSION "2.4.0"
 
 /// @brief Encode version to one number
 #define UPA_MAKE_VERSION_NUM(n1, n2, n3) ((n1) << 16 | (n2) << 8 | (n3))
@@ -4190,9 +4218,9 @@ public:
     /// More info: https://url.spec.whatwg.org/#dom-url-href
     ///
     /// @return serialized URL
-    [[nodiscard]] string_view href() const;
+    [[nodiscard]] string_view href() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link href() const @endlink
-    [[nodiscard]] string_view get_href() const { return href(); }
+    [[nodiscard]] string_view get_href() const UPA_LIFETIMEBOUND { return href(); }
 
     /// @brief The origin getter
     ///
@@ -4209,45 +4237,45 @@ public:
     /// More info: https://url.spec.whatwg.org/#dom-url-protocol
     ///
     /// @return URL's scheme, followed by U+003A (:)
-    [[nodiscard]] string_view protocol() const;
+    [[nodiscard]] string_view protocol() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link protocol() const @endlink
-    [[nodiscard]] string_view get_protocol() const { return protocol(); }
+    [[nodiscard]] string_view get_protocol() const UPA_LIFETIMEBOUND { return protocol(); }
 
     /// @brief The username getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-username
     ///
     /// @return URL’s username
-    [[nodiscard]] string_view username() const;
+    [[nodiscard]] string_view username() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link username() const @endlink
-    [[nodiscard]] string_view get_username() const { return username(); }
+    [[nodiscard]] string_view get_username() const UPA_LIFETIMEBOUND { return username(); }
 
     /// @brief The password getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-password
     ///
     /// @return URL’s password
-    [[nodiscard]] string_view password() const;
+    [[nodiscard]] string_view password() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link password() const @endlink
-    [[nodiscard]] string_view get_password() const { return password(); }
+    [[nodiscard]] string_view get_password() const UPA_LIFETIMEBOUND { return password(); }
 
     /// @brief The host getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-host
     ///
     /// @return URL’s host, serialized, followed by U+003A (:) and URL’s port, serialized
-    [[nodiscard]] string_view host() const;
+    [[nodiscard]] string_view host() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link host() const @endlink
-    [[nodiscard]] string_view get_host() const { return host(); }
+    [[nodiscard]] string_view get_host() const UPA_LIFETIMEBOUND { return host(); }
 
     /// @brief The hostname getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-hostname
     ///
     /// @return URL’s host, serialized
-    [[nodiscard]] string_view hostname() const;
+    [[nodiscard]] string_view hostname() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link hostname() const @endlink
-    [[nodiscard]] string_view get_hostname() const { return hostname(); }
+    [[nodiscard]] string_view get_hostname() const UPA_LIFETIMEBOUND { return hostname(); }
 
     /// @brief The host_type getter
     ///
@@ -4259,9 +4287,9 @@ public:
     /// More info: https://url.spec.whatwg.org/#dom-url-port
     ///
     /// @return URL’s port, serialized, if URL’s port is not null, otherwise empty string
-    [[nodiscard]] string_view port() const;
+    [[nodiscard]] string_view port() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link port() const @endlink
-    [[nodiscard]] string_view get_port() const { return port(); }
+    [[nodiscard]] string_view get_port() const UPA_LIFETIMEBOUND { return port(); }
 
     /// @return URL’s port, converted to `int` value, if URL’s port is not null,
     ///   otherwise `-1`
@@ -4275,36 +4303,36 @@ public:
     /// @brief The path getter
     ///
     /// @return URL's path, serialized, followed by U+003F (?) and URL’s query
-    [[nodiscard]] string_view path() const;
+    [[nodiscard]] string_view path() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link path() const @endlink
-    [[nodiscard]] string_view get_path() const { return path(); }
+    [[nodiscard]] string_view get_path() const UPA_LIFETIMEBOUND { return path(); }
 
     /// @brief The pathname getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-pathname
     ///
     /// @return URL’s path, serialized
-    [[nodiscard]] string_view pathname() const;
+    [[nodiscard]] string_view pathname() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link pathname() const @endlink
-    [[nodiscard]] string_view get_pathname() const { return pathname(); }
+    [[nodiscard]] string_view get_pathname() const UPA_LIFETIMEBOUND { return pathname(); }
 
     /// @brief The search getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-search
     ///
     /// @return empty string or U+003F (?), followed by URL’s query
-    [[nodiscard]] string_view search() const;
+    [[nodiscard]] string_view search() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link search() const @endlink
-    [[nodiscard]] string_view get_search() const { return search(); }
+    [[nodiscard]] string_view get_search() const UPA_LIFETIMEBOUND { return search(); }
 
     /// @brief The hash getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-hash
     ///
     /// @return empty string or U+0023 (#), followed by URL’s fragment
-    [[nodiscard]] string_view hash() const;
+    [[nodiscard]] string_view hash() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link hash() const @endlink
-    [[nodiscard]] string_view get_hash() const { return hash(); }
+    [[nodiscard]] string_view get_hash() const UPA_LIFETIMEBOUND { return hash(); }
 
     /// @brief The searchParams getter
     ///
@@ -4314,7 +4342,7 @@ public:
     /// operation (except @c safe_assign, which preserves reference validity).
     ///
     /// @return reference to this’s query object (url_search_params class)
-    url_search_params& search_params()&;
+    url_search_params& search_params()& UPA_LIFETIMEBOUND;
 
     /// @brief The searchParams getter for rvalue url
     ///
@@ -4329,7 +4357,7 @@ public:
     ///
     /// @param[in] exclude_fragment exclude fragment when serializing
     /// @return serialized URL as string_view
-    [[nodiscard]] string_view serialize(bool exclude_fragment = false) const;
+    [[nodiscard]] string_view serialize(bool exclude_fragment = false) const UPA_LIFETIMEBOUND;
 
     // Get url info
 
@@ -4393,7 +4421,7 @@ public:
     ///
     /// @param[in] t URL's part
     /// @return URL's part string; it is empty if part is empty or null
-    [[nodiscard]] string_view get_part_view(PartType t) const;
+    [[nodiscard]] string_view get_part_view(PartType t) const UPA_LIFETIMEBOUND;
 
     /// @brief Checks whether the URL's part (URL record member) is empty or null
     ///
@@ -4490,7 +4518,7 @@ private:
     void set_scheme(std::size_t scheme_length);
 
     // path util
-    string_view get_path_first_string(std::size_t len) const;
+    string_view get_path_first_string(std::size_t len) const UPA_LIFETIMEBOUND;
     // path shortening
     bool get_path_rem_last(std::size_t& path_end, std::size_t& path_segment_count) const;
     bool get_shorten_path(std::size_t& path_end, std::size_t& path_segment_count) const;
@@ -4955,7 +4983,7 @@ inline void url::move_record(url& other) noexcept {
 
 // url getters
 
-inline string_view url::href() const {
+inline string_view url::href() const UPA_LIFETIMEBOUND {
     return norm_url_;
 }
 
@@ -4989,20 +5017,20 @@ inline std::string url::origin() const {
     return "null"; // opaque origin
 }
 
-inline string_view url::protocol() const {
+inline string_view url::protocol() const UPA_LIFETIMEBOUND {
     // "scheme:"
     return { norm_url_.data(), part_end_[SCHEME] ? part_end_[SCHEME] + 1 : 0 };
 }
 
-inline string_view url::username() const {
+inline string_view url::username() const UPA_LIFETIMEBOUND {
     return get_part_view(USERNAME);
 }
 
-inline string_view url::password() const {
+inline string_view url::password() const UPA_LIFETIMEBOUND {
     return get_part_view(PASSWORD);
 }
 
-inline string_view url::host() const {
+inline string_view url::host() const UPA_LIFETIMEBOUND {
     if (is_null(HOST))
         return {};
     // "hostname:port"
@@ -5011,7 +5039,7 @@ inline string_view url::host() const {
     return { norm_url_.data() + b, e - b };
 }
 
-inline string_view url::hostname() const {
+inline string_view url::hostname() const UPA_LIFETIMEBOUND {
     return get_part_view(HOST);
 }
 
@@ -5019,7 +5047,7 @@ inline HostType url::host_type() const noexcept {
     return static_cast<HostType>((flags_ & HOST_TYPE_MASK) >> HOST_TYPE_SHIFT);
 }
 
-inline string_view url::port() const {
+inline string_view url::port() const UPA_LIFETIMEBOUND {
     return get_part_view(PORT);
 }
 
@@ -5036,20 +5064,20 @@ inline int url::real_port_int() const {
 }
 
 // pathname + search
-inline string_view url::path() const {
+inline string_view url::path() const UPA_LIFETIMEBOUND {
     // "pathname?query"
     const std::size_t b = part_end_[PATH - 1];
     const std::size_t e = part_end_[QUERY] ? part_end_[QUERY] : part_end_[PATH];
     return { norm_url_.data() + b, e ? e - b : 0 };
 }
 
-inline string_view url::pathname() const {
+inline string_view url::pathname() const UPA_LIFETIMEBOUND {
     // https://url.spec.whatwg.org/#dom-url-pathname
     // already serialized as needed
     return get_part_view(PATH);
 }
 
-inline string_view url::search() const {
+inline string_view url::search() const UPA_LIFETIMEBOUND {
     const std::size_t b = part_end_[QUERY - 1];
     const std::size_t e = part_end_[QUERY];
     // is empty?
@@ -5059,7 +5087,7 @@ inline string_view url::search() const {
     return { norm_url_.data() + b, e - b };
 }
 
-inline string_view url::hash() const {
+inline string_view url::hash() const UPA_LIFETIMEBOUND {
     const std::size_t b = part_end_[FRAGMENT - 1];
     const std::size_t e = part_end_[FRAGMENT];
     // is empty?
@@ -5069,7 +5097,7 @@ inline string_view url::hash() const {
     return { norm_url_.data() + b, e - b };
 }
 
-inline url_search_params& url::search_params()& {
+inline url_search_params& url::search_params()& UPA_LIFETIMEBOUND {
     if (!search_params_ptr_)
         search_params_ptr_.init(this);
     return *search_params_ptr_;
@@ -5091,7 +5119,7 @@ inline void url::parse_search_params() {
         search_params_ptr_.parse_params(get_part_view(QUERY));
 }
 
-inline string_view url::serialize(bool exclude_fragment) const {
+inline string_view url::serialize(bool exclude_fragment) const UPA_LIFETIMEBOUND {
     if (exclude_fragment && part_end_[FRAGMENT])
         return { norm_url_.data(), part_end_[QUERY] };
     return norm_url_;
@@ -5107,7 +5135,7 @@ inline bool url::is_valid() const noexcept {
     return !!(flags_ & VALID_FLAG);
 }
 
-inline string_view url::get_part_view(PartType t) const {
+inline string_view url::get_part_view(PartType t) const UPA_LIFETIMEBOUND {
     if (t == SCHEME)
         return { norm_url_.data(), part_end_[SCHEME] };
     // begin & end offsets
@@ -5759,15 +5787,16 @@ inline validation_errc url_parser::url_parse(url_serializer& urls, const CharT* 
                     return validation_errc::host_missing;
                 }
                 // 3.2. if state override is given, buffer is the empty string, and either
-                // url includes credentials or url’s port is non-null, return.
+                // url includes credentials or url’s port is non-null, then return failure.
                 if (state_override && (urls.has_credentials() || !urls.is_null(url::PORT))) {
-                    return validation_errc::ignored; // can not make host empty
+                    return validation_errc::ignored; // failure: can not make host empty
                 }
             }
 
-            // 2.2. If state override is given and state override is hostname state, then return
+            // 2.2. If state override is given and state override is hostname state, then
+            // return failure.
             if (is_port && state_override == hostname_state)
-                return validation_errc::ignored; // host with port not accepted
+                return validation_errc::ignored; // failure: host with port not accepted
 
             // parse and set host:
             const auto res = parse_host(urls, pointer, it_host_end);
@@ -5826,7 +5855,7 @@ inline validation_errc url_parser::url_parse(url_serializer& urls, const CharT* 
                 if (state_override)
                     return validation_errc::ok;
             } else if (state_override)
-                return validation_errc::ignored;
+                return validation_errc::ignored; // failure
             state = path_start_state;
             pointer = end_of_digits;
         } else {
@@ -6301,7 +6330,7 @@ inline void url_parser::do_opaque_path(const CharT* pointer, const CharT* last, 
 
 // path util
 
-inline string_view url::get_path_first_string(std::size_t len) const {
+inline string_view url::get_path_first_string(std::size_t len) const UPA_LIFETIMEBOUND {
     string_view pathv = get_part_view(PATH);
     if (pathv.empty() || has_opaque_path())
         return pathv;
@@ -7148,9 +7177,8 @@ template <class StrT, enable_if_str_arg_t<StrT> = 0>
 #ifdef UPA_CPP_20
     const std::string path_str = path_from_file_url(file_url);
     // the path_str is encoded in UTF-8
-    const auto* first = reinterpret_cast<const char8_t*>(path_str.data());
-    const auto* last = first + path_str.size();
-    return { first, last, std::filesystem::path::native_format };
+    return { util::to_string_view<char8_t>(path_str.data(), path_str.size()),
+        std::filesystem::path::native_format };
 #else
     // the u8path is deprecated in C++20
     return std::filesystem::u8path(path_from_file_url(file_url));
