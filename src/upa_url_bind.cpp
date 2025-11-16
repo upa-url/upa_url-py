@@ -204,6 +204,11 @@ NB_MODULE(upa_url, m) {
         .def("finalize", &public_suffix_list_py::finalize)
 
         // Load Public Suffix List from file
+        .def("__init__", [](public_suffix_list_py* t, std::string_view filename) {
+                new (t) public_suffix_list_py{};
+                if (!t->load(filename))
+                    throw std::runtime_error("Error loading Public Suffix List from file.");
+            }, nb::arg("filename"))
         .def_static("load", [](std::string_view filename)
             -> std::optional<public_suffix_list_py> {
                 public_suffix_list_py psl;

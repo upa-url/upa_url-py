@@ -25,6 +25,17 @@ class TestPSL(unittest.TestCase):
         psl.push('^.com')
         self.assertFalse(psl.finalize())
 
+    def test_psl_construct(self):
+        # Use constructor to load the list
+        dir = os.path.dirname(os.path.realpath(__file__))
+        psl = PSL(os.path.join(dir, 'PSL.dat'))
+        # public suffix
+        self.assertEqual(psl.public_suffix('any.org.uk'), 'org.uk')
+
+        # Load error
+        with self.assertRaises(RuntimeError):
+            PSL(os.path.join(dir, 'no_such_file.dat'))
+
     def test_psl(self):
         # Load list
         dir = os.path.dirname(os.path.realpath(__file__))
