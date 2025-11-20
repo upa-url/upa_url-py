@@ -16,7 +16,9 @@ class TestPSL(unittest.TestCase):
         psl = PSL()
         psl.push('githu')
         psl.push('b.io')
+        psl.push(b'\ngov.lt')
         self.assertTrue(psl.finalize())
+        self.assertEqual(psl.public_suffix('data.gov.lt'), 'gov.lt')
         self.assertEqual(psl.public_suffix('upa-url.github.io.'), 'github.io.')
         self.assertEqual(psl.public_suffix('abc.io.'), 'io.')
 

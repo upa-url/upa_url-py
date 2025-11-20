@@ -29,6 +29,10 @@ inline std::string_view to_string_view(nb::str str) {
     return {};
 }
 
+inline std::string_view to_string_view(nb::bytes bytes) {
+    return { bytes.c_str(), bytes.size() };
+}
+
 inline nb::str to_str(std::string_view sv) {
     return nb::str{ sv.data(), sv.length() };
 }
@@ -40,6 +44,9 @@ public:
     }
     inline void push(std::string_view buff) {
         upa::public_suffix_list::push(ctx_, buff);
+    }
+    inline void push_bytes(nb::bytes bytes) {
+        upa::public_suffix_list::push(ctx_, to_string_view(bytes));
     }
     inline bool finalize() {
         return upa::public_suffix_list::finalize(ctx_);
@@ -201,6 +208,7 @@ NB_MODULE(upa_url, m) {
         .def(nb::init<>())
         .def("push_line", &public_suffix_list_py::push_line, nb::arg("line"))
         .def("push", &public_suffix_list_py::push, nb::arg("buff"))
+        .def("push", &public_suffix_list_py::push_bytes, nb::arg("buff"))
         .def("finalize", &public_suffix_list_py::finalize)
 
         // Load Public Suffix List from file
