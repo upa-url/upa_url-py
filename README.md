@@ -16,7 +16,7 @@ If the binary wheel is not available for your platform, then you will need a C++
 
 First, you need to import classes:
 ```python
-from upa_url import URL, URLSearchParams
+from upa_url import PSL, URL, URLSearchParams
 ```
 
 ### URL class
@@ -127,6 +127,64 @@ There are functions to manipulate search parameters:
    params.sort()
    print(params) # a=3&b=2&c=1
    ```
+
+### PSL class
+
+The PSL class allows getting the [public suffix](https://url.spec.whatwg.org/#host-public-suffix) and [registrable domain](https://url.spec.whatwg.org/#host-registrable-domain) of a given host.
+
+First, you need to create a PSL object and load the [Public Suffix List](https://publicsuffix.org/). This list can be downloaded from https://publicsuffix.org/list/public_suffix_list.dat. The downloaded file can be loaded using one of the following methods:
+1. Use the `load` function:
+   ```python
+   psl = PSL.load('public_suffix_list.dat')
+   if (psl is not None):
+       print(psl.public_suffix('upa-url.github.io')) # github.io
+   ```
+2. Use the `PSL` constructor:
+   ```python
+   try:
+       psl = PSL('public_suffix_list.dat')
+       # Use psl
+   except Exception:
+       print('PSL loading error')
+   ```
+
+The Public Suffix List can be loaded from memory using the push interface:
+1. Line by line:
+   ```python
+   psl = PSL()
+   with open('public_suffix_list.dat', 'r', encoding='utf-8') as f:
+       for line in f:
+           psl.push_line(line.rstrip())
+   if psl.finalize():
+       # Use psl
+   ```
+2. Using the memory buffer, for example, to load a list from the web:
+   ```python
+   import urllib.request
+   url = 'https://upa-url.github.io/demo/public_suffix_list.dat'
+   psl = PSL()
+   with urllib.request.urlopen(url) as response:
+       while (chunk := response.read(4096)):
+           psl.push(chunk)
+   if psl.finalize():
+       # Use psl
+   ```
+
+The following examples show how to get a [public suffix](https://url.spec.whatwg.org/#host-public-suffix) and a [registrable domain](https://url.spec.whatwg.org/#host-registrable-domain):
+```python
+# Get from the host string
+print(psl.public_suffix('abc.ålgård.no')) # xn--lgrd-poac.no
+print(psl.registrable_domain('abc.ålgård.no')) # abc.xn--lgrd-poac.no
+
+# Get from the host string and do not convert the output to ASCII
+print(psl.public_suffix('abc.ålgård.no', ascii=False)) # ålgård.no
+print(psl.registrable_domain('abc.ålgård.no', ascii=False)) # abc.ålgård.no
+
+# Get from the URL
+url = URL('https://upa-url.github.io/docs/')
+print(psl.public_suffix(url)) # github.io
+print(psl.registrable_domain(url)) # upa-url.github.io
+```
 
 ## License
 
