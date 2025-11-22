@@ -51,7 +51,7 @@ enable = ["pypy"]
 test-command = "python -m unittest discover -s {project}/tests"
 
 # Don't test Python 3.8 wheels on macOS/arm64
-test-skip="cp38-macosx_*:arm64"
+test-skip = "cp38-macosx_*:arm64"
 
 # Needed for full C++17 support
 [tool.cibuildwheel.macos.environment]
