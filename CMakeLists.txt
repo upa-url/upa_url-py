@@ -40,7 +40,9 @@ nanobind_add_module(
   NB_STATIC
 
   # Source code
+  src/upa_psl_bind.cpp
   src/upa_url_bind.cpp
+  src/upa_url_module.cpp
   ext/upa/url.cpp
   ext/upa/public_suffix_list.cpp)
 
