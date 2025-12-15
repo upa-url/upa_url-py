@@ -23,7 +23,7 @@ jobs:
     - name: Check metadata
       run: pipx run twine check dist/*
 
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v6
       with:
         name: dist-sdist
         path: dist/*.tar.gz
@@ -42,7 +42,7 @@ jobs:
     - name: Build wheels
       uses: pypa/cibuildwheel@v3.3.0
 
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v6
       with:
         name: dist-${{ matrix.os }}-${{ strategy.job-index }}
         path: wheelhouse/*.whl
