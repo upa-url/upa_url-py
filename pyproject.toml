@@ -1,7 +1,7 @@
 [build-system]
 requires = [
     "scikit-build-core >=0.10",
-    "nanobind >=2.9.2, <2.10.0"
+    "nanobind >=2.9.2, <2.11.0"
 ]
 build-backend = "scikit_build_core.build"
 
@@ -13,7 +13,7 @@ authors = [
 ]
 description = "WHATWG URL Standard compliant URL parser library"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: C++",
@@ -49,9 +49,6 @@ enable = ["pypy"]
 
 # Run tests to ensure that the package was correctly built
 test-command = "python -m unittest discover -s {project}/tests"
-
-# Don't test Python 3.8 wheels on macOS/arm64
-test-skip = "cp38-macosx_*:arm64"
 
 # Needed for full C++17 support
 [tool.cibuildwheel.macos.environment]
