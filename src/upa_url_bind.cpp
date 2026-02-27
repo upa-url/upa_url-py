@@ -78,14 +78,14 @@ void bind_url(nb::module_& m) {
     nb::class_<upa::url_search_params>(m, "URLSearchParams")
         // constructors
         .def(nb::init<>())
-        .def(nb::init<std::string_view>())
+        .def(nb::init<std::string_view>(), nb::arg("init"))
         .def("__init__", [](upa::url_search_params* t, nb::dict dict) {
                 new (t) upa::url_search_params{};
                 for (auto [key, value] : dict)
                     t->append(
                         to_string_view(nb::str(key)),
                         to_string_view(nb::str(value)));
-            })
+            }, nb::arg("init"))
         .def("__init__", [](upa::url_search_params* t, nb::iterable iterable) {
                 new (t) upa::url_search_params{};
                 for (auto item : iterable) {
@@ -109,7 +109,7 @@ void bind_url(nb::module_& m) {
                     }
                     nb::raise("items must be tuples or lists");
                 }
-            })
+            }, nb::arg("init"))
 
         .def("__copy__", [](const upa::url_search_params& self) {
                 return upa::url_search_params(self);
