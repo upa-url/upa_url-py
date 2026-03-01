@@ -155,6 +155,21 @@ void bind_url(nb::module_& m) {
             }, nb::keep_alive<0, 1>())
         .def("__str__", &upa::url_search_params::to_string)
         ;
+
+    // enum class file_path_format
+    nb::enum_<upa::file_path_format>(m, "file_path_format")
+        .value("posix", upa::file_path_format::posix)
+        .value("windows", upa::file_path_format::windows)
+        .value("native", upa::file_path_format::native);
+
+    // Functions
+    m.def("url_from_file_path", &upa::url_from_file_path<std::string_view>,
+        nb::arg("path"), nb::arg("format") = upa::file_path_format::native);
+    m.def("path_from_file_url", &upa::path_from_file_url,
+        nb::arg("file_url"), nb::arg("format") = upa::file_path_format::native);
+    m.def("path_from_file_url", [](std::string_view file_url, upa::file_path_format format) {
+            return upa::path_from_file_url(upa::url{ file_url }, format);
+        }, nb::arg("file_url"), nb::arg("format") = upa::file_path_format::native);
 }
 
 } // namespace upa::py

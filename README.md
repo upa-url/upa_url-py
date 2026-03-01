@@ -186,6 +186,39 @@ print(psl.public_suffix(url)) # github.io
 print(psl.registrable_domain(url)) # upa-url.github.io
 ```
 
+## Conversion functions
+
+First, you need to import library:
+```python
+import upa_url
+```
+
+Convert from OS file path to URL. The input path must be absolute:
+```python
+try:
+    url = upa_url.url_from_file_path('/c:/path', upa_url.file_path_format.posix)
+    print(url.href) # file:///c%3A/path
+    url = upa_url.url_from_file_path('c:\\path', upa_url.file_path_format.windows)
+    print(url.href) # file:///c:/path
+except Exception as err:
+    print('Conversion error:', err)
+```
+
+Convert from file URL to OS path:
+```python
+try:
+    url = upa_url.URL('file:///c:/path')
+    print(upa_url.path_from_file_url(url, upa_url.file_path_format.posix)) # /c:/path
+    print(upa_url.path_from_file_url(url, upa_url.file_path_format.windows)) # c:\path
+    url_str = 'file:///c%3A/path'
+    print(upa_url.path_from_file_url(url_str, upa_url.file_path_format.posix)) # /c:/path
+    print(upa_url.path_from_file_url(url_str, upa_url.file_path_format.windows)) # c:\path
+except Exception as err:
+    print('Conversion error:', err)
+```
+
+These functions allow the second parameter to be omitted or set to `upa_url.file_path_format.native`. In that case, the conversion will depend on the operating system on which the script runs.
+
 ## License
 
 This package is licensed under the [BSD 2-Clause License](https://opensource.org/license/bsd-2-clause/) (see `LICENSE` file).
