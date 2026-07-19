@@ -4,22 +4,25 @@
 //
 #include "url.h"
 
-// Copyright 2017-2025 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-// #include "upa/idna.h"
+#ifndef UPA_MODULE
+// # include "upa/idna.h"
+#endif // UPA_MODULE
 
-
-// Copyright 2017-2025 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
 #ifndef UPA_IDNA_IDNA_TABLE_H
 #define UPA_IDNA_IDNA_TABLE_H
 
-#include <cstddef>
-#include <cstdint>
+#ifndef UPA_MODULE
+# include <cstddef>
+# include <cstdint>
+#endif // UPA_MODULE
 
 namespace upa::idna::util {
 
@@ -83,7 +86,7 @@ constexpr std::uint32_t getValidMask(bool useSTD3ASCIIRules, bool transitional) 
     return transitional ? status_mask : (status_mask & ~CP_MAPPED);
 }
 
-inline std::uint32_t getCharInfo(uint32_t cp) {
+inline std::uint32_t getCharInfo(std::uint32_t cp) {
     if (cp >= uni_default_start) {
         if (cp >= uni_spec_range1 && cp <= uni_spec_range2) {
             return uni_spec_value;
@@ -95,7 +98,7 @@ inline std::uint32_t getCharInfo(uint32_t cp) {
 }
 
 template <class StrT>
-inline std::size_t apply_mapping(uint32_t val, StrT& output) {
+inline std::size_t apply_mapping(std::uint32_t val, StrT& output) {
     if (val & MAP_TO_ONE) {
         output.push_back(val & 0xFFFF);
         return 1;
@@ -117,14 +120,16 @@ inline std::size_t apply_mapping(uint32_t val, StrT& output) {
 } // namespace upa::idna::util
 
 #endif // UPA_IDNA_IDNA_TABLE_H
-// Copyright 2017-2024 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
 #ifndef UPA_IDNA_ITERATE_UTF_H
 #define UPA_IDNA_ITERATE_UTF_H
 
-// #include <cstdint>
+#ifndef UPA_MODULE
+// # include <cstdint>
+#endif // UPA_MODULE
 
 namespace upa::idna::util {
 
@@ -133,10 +138,10 @@ namespace upa::idna::util {
 inline constexpr char32_t kReplacementCharacter = 0xFFFD;
 
 // https://encoding.spec.whatwg.org/#utf-8-decoder
-constexpr uint32_t getCodePoint(const char*& it, const char* last) noexcept {
+constexpr std::uint32_t getCodePoint(const char*& it, const char* last) noexcept {
     const auto uchar = [](char c) { return static_cast<unsigned char>(c); };
     // assume it != last
-    uint32_t c1 = uchar(*it++);
+    std::uint32_t c1 = uchar(*it++);
     if (c1 >= 0x80) {
         if (c1 < 0xC2 || c1 > 0xF4)
             return kReplacementCharacter;
@@ -187,18 +192,18 @@ constexpr bool is_surrogate_trail(T ch) noexcept {
 
 // Get a supplementary code point value(U + 10000..U + 10ffff)
 // from its lead and trail surrogates.
-constexpr uint32_t get_suplementary(uint32_t lead, uint32_t trail) noexcept {
-    constexpr uint32_t surrogate_offset = (static_cast<uint32_t>(0xD800) << 10) + 0xDC00 - 0x10000;
+constexpr std::uint32_t get_suplementary(std::uint32_t lead, std::uint32_t trail) noexcept {
+    constexpr std::uint32_t surrogate_offset = (static_cast<std::uint32_t>(0xD800) << 10) + 0xDC00 - 0x10000;
     return (lead << 10) + trail - surrogate_offset;
 }
 
 // assumes it != last
 
-constexpr uint32_t getCodePoint(const char16_t*& it, const char16_t* last) noexcept {
+constexpr std::uint32_t getCodePoint(const char16_t*& it, const char16_t* last) noexcept {
     // assume it != last
-    const uint32_t c1 = *it++;
+    const std::uint32_t c1 = *it++;
     if (is_surrogate_lead(c1) && it != last) {
-        const uint32_t c2 = *it;
+        const std::uint32_t c2 = *it;
         if (is_surrogate_trail(c2)) {
             ++it;
             return get_suplementary(c1, c2);
@@ -209,7 +214,7 @@ constexpr uint32_t getCodePoint(const char16_t*& it, const char16_t* last) noexc
 
 // Get code point from UTF-32
 
-constexpr uint32_t getCodePoint(const char32_t*& it, const char32_t*) noexcept {
+constexpr std::uint32_t getCodePoint(const char32_t*& it, const char32_t*) noexcept {
     // assume it != last
     return *it++;
 }
@@ -217,26 +222,28 @@ constexpr uint32_t getCodePoint(const char32_t*& it, const char32_t*) noexcept {
 } // namespace upa::idna::util
 
 #endif // UPA_IDNA_ITERATE_UTF_H
-// Copyright 2017-2025 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-// #include "upa/idna/idna.h"
+#ifndef UPA_MODULE
+// # include "upa/idna/idna.h"
+
+// # include "upa/idna/nfc.h"
+
+// # include "upa/idna/punycode.h"
+
+# include <algorithm>
+# include <iterator>
+# include <stdexcept>
+# include <string>
+# include <type_traits> // std::make_unsigned
+#endif // UPA_MODULE
 
 // #include "idna_table.h"
 
 // #include "iterate_utf.h"
 
-// #include "upa/idna/nfc.h"
-
-// #include "upa/idna/punycode.h"
-
-
-#include <algorithm>
-#include <iterator>
-#include <stdexcept>
-#include <string>
-#include <type_traits> // std::make_unsigned
 
 namespace upa::idna {
 namespace {
@@ -256,10 +263,8 @@ inline void split(InputIt first, InputIt last, const T& delim, FunT output) {
 
 // Processing
 
-enum BidiRes : int {
-    IsBidiDomain = 0x01,
-    IsBidiError = 0x02
-};
+constexpr int IsBidiDomain = 0x01;
+constexpr int IsBidiError = 0x02;
 
 bool validate_label(const char32_t* label, const char32_t* label_end, Option options, bool full_check, int& bidiRes);
 bool validate_bidi(const char32_t* label, const char32_t* label_end, int& bidiRes);
@@ -336,17 +341,17 @@ bool validate_label(const char32_t* label, const char32_t* label_end, Option opt
         // V5 - can be ignored (todo)
 
         // V6
-        const uint32_t cpflags = util::getCharInfo(label[0]); // label != label_end
+        const std::uint32_t cpflags = util::getCharInfo(label[0]); // label != label_end
         if (cpflags & util::CAT_MARK)
             return false;
 
         // V7
         // TODO: if (full_check)
-        const uint32_t valid_mask = util::getValidMask(
+        const std::uint32_t valid_mask = util::getValidMask(
             detail::has(options, Option::UseSTD3ASCIIRules),
             detail::has(options, Option::Transitional));
         for (auto it = label; it != label_end;) {
-            const uint32_t cpflags = util::getCharInfo(*it++); // it != label_end
+            const std::uint32_t cpflags = util::getCharInfo(*it++); // it != label_end
             if ((cpflags & valid_mask) != util::CP_VALID) {
                 return false;
             }
@@ -357,12 +362,12 @@ bool validate_label(const char32_t* label, const char32_t* label_end, Option opt
             // https://tools.ietf.org/html/rfc5892#appendix-A
             for (auto it = label; it != label_end;) {
                 auto start = it;
-                const uint32_t cp = *it++; // it != label_end
+                const std::uint32_t cp = *it++; // it != label_end
                 if (cp == 0x200C) {
                     // ZERO WIDTH NON-JOINER
                     if (start == label)
                         return false;
-                    uint32_t cpflags = util::getCharInfo(*(--start)); // label != start
+                    std::uint32_t cpflags = util::getCharInfo(*(--start)); // label != start
                     if (!(cpflags & util::CAT_Virama)) {
                         // {R,D} is required on the right
                         if (it == label_end)
@@ -406,7 +411,7 @@ bool validate_label(const char32_t* label, const char32_t* label_end, Option opt
 inline bool is_bidi(const char32_t* first, const char32_t* last) {
     // https://tools.ietf.org/html/rfc5893#section-2
     for (auto it = first; it != last;) {
-        const uint32_t cpflags = util::getCharInfo(*it++); // it != last
+        const std::uint32_t cpflags = util::getCharInfo(*it++); // it != last
         // A "Bidi domain name" is a domain name that contains at least one RTL
         // label. An RTL label is a label that contains at least one character
         // of type R, AL, or AN.
@@ -428,11 +433,11 @@ bool validate_bidi(const char32_t* label, const char32_t* label_end, int& bidiRe
     }
 
     // 1. The first character must be a character with Bidi property L, R, or AL
-    uint32_t cpflags = util::getCharInfo(*label++); // label != label_end
+    std::uint32_t cpflags = util::getCharInfo(*label++); // label != label_end
     if (cpflags & util::CAT_Bidi_R_AL) {
         // RTL
-        uint32_t end_cpflags = cpflags;
-        uint32_t all_cpflags = 0;
+        std::uint32_t end_cpflags = cpflags;
+        std::uint32_t all_cpflags = 0;
         for (auto it = label; it != label_end;) {
             cpflags = util::getCharInfo(*it++); // it != label_end
             // 2. R, AL, AN, EN, ES, CS, ET, ON, BN, NSM
@@ -455,7 +460,7 @@ bool validate_bidi(const char32_t* label, const char32_t* label_end, int& bidiRe
         bidiRes |= IsBidiDomain;
     } else if (cpflags & util::CAT_Bidi_L) {
         // LTR
-        uint32_t end_cpflags = cpflags;
+        std::uint32_t end_cpflags = cpflags;
         for (auto it = label; it != label_end;) {
             cpflags = util::getCharInfo(*it++); // it != label_end
 #if 0
@@ -504,6 +509,16 @@ bool validate_bidi(const char32_t* label, const char32_t* label_end, int& bidiRe
     return true;
 }
 
+// This function does not reduce the capacity of the string if it is greater
+// than new_cap, to avoid unnecessary memory reallocations in some cases.
+template <class CharT>
+UPA_IDNA_CONSTEXPR_20 void reserve(std::basic_string<CharT>& str, std::size_t new_cap) {
+#ifndef UPA_IDNA_CPP_20
+    if (str.capacity() < new_cap)
+#endif
+        str.reserve(new_cap);
+}
+
 template <class InputIt>
 inline void str_append(std::string& dest, InputIt first, InputIt last) {
 #ifdef _MSC_VER
@@ -511,7 +526,7 @@ inline void str_append(std::string& dest, InputIt first, InputIt last) {
     if (dest.max_size() - dest.size() < input_size)
         throw std::length_error("too big size");
     // now it is safe to add sizes
-    dest.reserve(dest.size() + input_size);
+    reserve(dest, dest.size() + input_size);
     for (auto it = first; it != last; ++it)
         dest.push_back(static_cast<char>(*it));
 #else
@@ -531,7 +546,7 @@ constexpr char ascii_to_lower_char(CharT c) noexcept {
 // IDNA map and normalize to NFC
 
 template <typename CharT>
-bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Option options, bool is_to_ascii) {
+bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Option options) {
     using UCharT = std::make_unsigned_t<CharT>;
 
     // P1 - Map
@@ -550,7 +565,7 @@ bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Opt
                     break;
                 default:
                     // util::AC_DISALLOWED_STD3
-                    if (is_to_ascii)
+                    if (has(options, Option::FailFast))
                         return false;
                     mapped.push_back(cp);
                 }
@@ -560,10 +575,10 @@ bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Opt
                 mapped.push_back(ascii_to_lower_char(*it));
         }
     } else {
-        const uint32_t status_mask = util::getStatusMask(has(options, Option::UseSTD3ASCIIRules));
+        const std::uint32_t status_mask = util::getStatusMask(has(options, Option::UseSTD3ASCIIRules));
         for (auto it = input; it != input_end; ) {
-            const uint32_t cp = util::getCodePoint(it, input_end);
-            const uint32_t value = util::getCharInfo(cp);
+            const std::uint32_t cp = util::getCodePoint(it, input_end);
+            const std::uint32_t value = util::getCharInfo(cp);
 
             switch (value & status_mask) {
             case util::CP_VALID:
@@ -587,8 +602,14 @@ bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Opt
             default:
                 // CP_DISALLOWED or
                 // CP_NO_STD3_VALID if Option::UseSTD3ASCIIRules
-                // Starting with Unicode 15.1.0 don't record an error
-                if (is_to_ascii && // to_ascii optimization
+                // Starting with Unicode 15.1.0, disallowed characters are checked after NFC
+                // normalization. However, normalization is expensive. Most disallowed characters
+                // are not normalized, so they remain after normalization. Analysis in
+                // unitool-idna.cpp shows that only three STD3 disallowed characters can be
+                // normalized: 0x3C, 0x3D, and 0x3E (see upa::idna::util::comp_disallowed_std3).
+                // So, for other disallowed characters, failure can be returned here, avoiding the
+                // normalization step.
+                if (has(options, Option::FailFast) &&
                     ((value & util::CP_DISALLOWED_STD3) == 0 || cp > 0x3E || cp < 0x3C))
                     return false;
                 mapped.push_back(cp);
@@ -604,9 +625,9 @@ bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Opt
 }
 
 // The `map` function template instantiations
-template bool map(std::u32string&, const char*, const char*, Option, bool);
-template bool map(std::u32string&, const char16_t*, const char16_t*, Option, bool);
-template bool map(std::u32string&, const char32_t*, const char32_t*, Option, bool);
+template bool map(std::u32string&, const char*, const char*, Option);
+template bool map(std::u32string&, const char16_t*, const char16_t*, Option);
+template bool map(std::u32string&, const char32_t*, const char32_t*, Option);
 
 // Performs ToASCII on IDNA-mapped and normalized to NFC input
 
@@ -2885,15 +2906,17 @@ const std::uint8_t ascii_data[128] = {
 // END-GENERATED
 
 } // namespace upa::idna::util
-// Copyright 2024-2025 Rimas Misevičius
+// Copyright 2024-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
 #ifndef UPA_IDNA_NFC_TABLE_H
 #define UPA_IDNA_NFC_TABLE_H
 
-// #include <cstddef>
-// #include <cstdint>
+#ifndef UPA_MODULE
+// # include <cstddef>
+// # include <cstdint>
+#endif // UPA_MODULE
 
 namespace upa::idna::normalize {
 
@@ -3002,16 +3025,18 @@ inline qc get_quick_check(std::uint32_t cp) {
 } // namespace upa::idna::normalize
 
 #endif // #ifndef UPA_IDNA_NFC_TABLE_H
-// Copyright 2024-2025 Rimas Misevičius
+// Copyright 2024-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-// #include "upa/idna/nfc.h"
+#ifndef UPA_MODULE
+// # include "upa/idna/nfc.h"
+
+// # include <algorithm>
+# include <utility> // std::move
+#endif // UPA_MODULE
 
 // #include "nfc_table.h"
-
-// #include <algorithm>
-#include <utility> // std::move
 
 
 namespace upa::idna {
@@ -4595,15 +4620,17 @@ const std::uint8_t quick_check_block_index[] = {
 // END-GENERATED
 
 } // namespace upa::idna::normalize
-// Copyright 2017-2024 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-// #include "upa/idna/punycode.h"
+#ifndef UPA_MODULE
+// # include "upa/idna/punycode.h"
 
-// #include <algorithm>
-// #include <cstdint>
-// #include <type_traits>
+// # include <algorithm>
+// # include <cstdint>
+// # include <type_traits>
+#endif // UPA_MODULE
 
 namespace upa::idna::punycode {
 
@@ -4854,13 +4881,13 @@ status decode(std::u32string& output, const char32_t* first, const char32_t* las
 
 
 } // namespace upa::idna::punycode
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-
-// #include "upa/url.h"
-
+#ifndef UPA_MODULE
+// # include "upa/url.h"
+#endif // UPA_MODULE
 
 namespace upa {
 namespace detail {
@@ -4883,7 +4910,7 @@ const scheme_info kSchemes[] = {
 const std::size_t max_scheme_length = 5; // "https"
 
 // scheme length to url::kSchemes index
-const uint8_t kLengthToSchemesInd[] = {
+const std::uint8_t kLengthToSchemesInd[] = {
     0,  // 0
     0,  // 1
     0,  // 2
@@ -4895,13 +4922,13 @@ const uint8_t kLengthToSchemesInd[] = {
 
 } // namespace
 
-const scheme_info* get_scheme_info(string_view src) {
+const scheme_info* get_scheme_info(std::string_view src) {
     const std::size_t len = src.length();
     if (len <= max_scheme_length) {
         const int end = kLengthToSchemesInd[len + 1];
         for (int ind = kLengthToSchemesInd[len]; ind < end; ++ind) {
             // The src and kSchemes[ind].scheme lengths are the same, so compare data only
-            if (string_view::traits_type::compare(src.data(), kSchemes[ind].scheme.data(), len) == 0)
+            if (std::string_view::traits_type::compare(src.data(), kSchemes[ind].scheme.data(), len) == 0)
                 return &kSchemes[ind];
         }
     }
@@ -4934,27 +4961,26 @@ std::uint32_t version_num() {
 
 
 } // namespace upa
-// Copyright 2016-2024 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-
-// #include "upa/url_ip.h"
-
-// #include "upa/util.h"
-
+#ifndef UPA_MODULE
+// # include "upa/url_ip.h"
+// # include "upa/util.h"
+#endif // UPA_MODULE
 
 namespace upa {
 
 // IPv4 serializer
 // https://url.spec.whatwg.org/#concept-ipv4-serializer
 
-void ipv4_serialize(uint32_t ipv4, std::string& output) {
+void ipv4_serialize(std::uint32_t ipv4, std::string& output) {
     for (unsigned shift = 24; shift != 0; shift -= 8) {
-        util::unsigned_to_str<uint32_t>((ipv4 >> shift) & 0xFF, output, 10);
+        util::unsigned_to_str<std::uint32_t>((ipv4 >> shift) & 0xFF, output, 10);
         output.push_back('.');
     }
-    util::unsigned_to_str<uint32_t>(ipv4 & 0xFF, output, 10);
+    util::unsigned_to_str<std::uint32_t>(ipv4 & 0xFF, output, 10);
 }
 
 // IPv6 serializer
@@ -4963,8 +4989,8 @@ void ipv4_serialize(uint32_t ipv4, std::string& output) {
 namespace {
 
 inline std::size_t longest_zero_sequence(
-    const uint16_t* first, const uint16_t* last,
-    const uint16_t*& compress)
+    const std::uint16_t* first, const std::uint16_t* last,
+    const std::uint16_t*& compress)
 {
     // The sequence to compress should be longer than 1 zero
     std::size_t last_count = 1;
@@ -4986,11 +5012,11 @@ inline std::size_t longest_zero_sequence(
 
 } // namespace
 
-void ipv6_serialize(const uint16_t(&address)[8], std::string& output) {
-    const uint16_t *first = std::begin(address);
-    const uint16_t *last = std::end(address);
+void ipv6_serialize(const std::uint16_t(&address)[8], std::string& output) {
+    const std::uint16_t *first = std::begin(address);
+    const std::uint16_t *last = std::end(address);
 
-    const uint16_t *compress = nullptr;
+    const std::uint16_t *compress = nullptr;
     const auto compress_length = longest_zero_sequence(first, last, compress);
 
     // "it" pointer corresponds to pieceIndex in the URL standard
@@ -5000,7 +5026,7 @@ void ipv6_serialize(const uint16_t(&address)[8], std::string& output) {
             it += compress_length;
             if (it == last) break;
         }
-        util::unsigned_to_str<uint32_t>(*it, output, 16);
+        util::unsigned_to_str<std::uint32_t>(*it, output, 16);
         if (++it == last) break;
         output.push_back(':');
     }
@@ -5008,16 +5034,14 @@ void ipv6_serialize(const uint16_t(&address)[8], std::string& output) {
 
 
 } // namespace upa
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-
-// #include "upa/url_percent_encode.h"
-
-// #include "upa/url_search_params.h"
-
-
+#ifndef UPA_MODULE
+// # include "upa/url_percent_encode.h"
+// # include "upa/url_search_params.h"
+#endif // UPA_MODULE
 
 namespace upa {
 namespace {
@@ -5050,7 +5074,7 @@ const char kEncByte[0x100] = {
 
 } // namespace
 
-void url_search_params::urlencode_sv(std::string& encoded, string_view value)
+void url_search_params::urlencode_sv(std::string& encoded, std::string_view value)
 {
     for (const char c : value) {
         const auto uc = static_cast<unsigned char>(c);
@@ -5064,14 +5088,14 @@ void url_search_params::urlencode_sv(std::string& encoded, string_view value)
 }
 
 } // namespace upa
-// Copyright 2016-2024 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
-
-// #include "upa/url_utf.h"
-
-#include <cassert>
+#ifndef UPA_MODULE
+// # include "upa/url_utf.h"
+# include <cassert>
+#endif // UPA_MODULE
 
 namespace upa {
 
@@ -5095,7 +5119,7 @@ void url_utf::check_fix_utf8(std::string& str) {
     const char* first = str.data();
     const char* last = str.data() + str.length();
 
-    uint32_t code_point; // NOLINT(cppcoreguidelines-init-variables)
+    std::uint32_t code_point; // NOLINT(cppcoreguidelines-init-variables)
     const char* ptr = first;
     const char* it = first;
     while (it != last && read_code_point(it, last, code_point))
@@ -5139,13 +5163,13 @@ int url_utf::compare_by_code_units(const char* first1, const char* last1, const 
         }
 
         // read code points
-        const uint32_t cp1 = read_utf_char(it1, last1).value;
-        const uint32_t cp2 = read_utf_char(it2, last2).value;
+        const std::uint32_t cp1 = read_utf_char(it1, last1).value;
+        const std::uint32_t cp2 = read_utf_char(it2, last2).value;
         if (cp1 == cp2) continue;
 
         // code points not equal - compare code units
-        uint32_t cu1 = cp1 <= 0xffff ? cp1 : ((cp1 >> 10) + 0xd7c0);
-        uint32_t cu2 = cp2 <= 0xffff ? cp2 : ((cp2 >> 10) + 0xd7c0);
+        std::uint32_t cu1 = cp1 <= 0xffff ? cp1 : ((cp1 >> 10) + 0xd7c0);
+        std::uint32_t cu2 = cp2 <= 0xffff ? cp2 : ((cp2 >> 10) + 0xd7c0);
         // cu1 can be equal to cu2 if they both are lead surrogates
         if (cu1 == cu2) {
             assert(detail::u16_is_lead(cu1));

@@ -1,4 +1,4 @@
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -18,7 +18,7 @@
 #define UPA_URL_H
 
 // #include "buffer.h"
-// Copyright 2016-2024 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -30,195 +30,8 @@
 #ifndef UPA_BUFFER_H
 #define UPA_BUFFER_H
 
-#include <array>
-#include <cstddef>
-#include <memory>
-#include <stdexcept>
-#include <string>
-
-namespace upa {
-
-template <
-    class T,
-    std::size_t fixed_capacity = 1024,
-    class Traits = std::char_traits<T>,
-    class Allocator = std::allocator<T>
->
-class simple_buffer {
-public:
-    using value_type = T ;
-    using traits_type = Traits;
-    using allocator_type = Allocator;
-    using allocator_traits = std::allocator_traits<allocator_type>;
-    using size_type = std::size_t;
-    // iterator
-    using const_iterator = const value_type*;
-
-    // default
-    simple_buffer() = default; // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
-    explicit simple_buffer(const Allocator& alloc)
-        : allocator_(alloc)
-    {}
-
-    // with initial capacity
-    explicit simple_buffer(size_type new_cap, const Allocator& alloc = Allocator())
-        : allocator_(alloc)
-    {
-        if (new_cap > fixed_capacity)
-            init_capacity(new_cap);
-    }
-
-    // disable copy/move
-    simple_buffer(const simple_buffer&) = delete;
-    simple_buffer(simple_buffer&&) = delete;
-    simple_buffer& operator=(const simple_buffer&) = delete;
-    simple_buffer& operator=(simple_buffer&&) = delete;
-
-    ~simple_buffer() {
-        if (data_ != fixed_buffer())
-            allocator_traits::deallocate(allocator_, data_, capacity_);
-    }
-
-    allocator_type get_allocator() const noexcept {
-        return allocator_;
-    }
-
-    value_type* data() noexcept {
-        return data_;
-    }
-    const value_type* data() const noexcept {
-        return data_;
-    }
-
-    const_iterator begin() const noexcept {
-        return data_;
-    }
-    const_iterator end() const noexcept {
-        return data_ + size_;
-    }
-
-    // Capacity
-    bool empty() const noexcept {
-        return size_ == 0;
-    }
-    size_type size() const noexcept {
-        return size_;
-    }
-    size_type max_size() const noexcept {
-        return allocator_traits::max_size(allocator_);
-    }
-    size_type capacity() const noexcept {
-        return capacity_;
-    }
-
-    void reserve(size_type new_cap) {
-        if (new_cap > capacity_)
-            grow_capacity(new_cap);
-    }
-
-    // Modifiers
-    void clear() noexcept {
-        size_ = 0;
-    }
-
-    void append(const value_type* first, const value_type* last) {
-        const auto ncopy = std::distance(first, last);
-        const size_type new_size = add_sizes(size_, ncopy);
-        if (new_size > capacity_)
-            grow(new_size);
-        // copy
-        traits_type::copy(data_ + size_, first, ncopy);
-        // new size
-        size_ = new_size;
-    }
-
-    void push_back(const value_type& value) {
-        if (size_ < capacity_) {
-            data_[size_] = value;
-            ++size_;
-            return;
-        }
-        // grow buffer capacity
-        grow(add_sizes(size_, 1));
-        data_[size_] = value;
-        ++size_;
-    }
-    void pop_back() {
-        --size_;
-    }
-    void resize(size_type count) {
-        reserve(count);
-        size_ = count;
-    }
-
-#ifdef DOCTEST_LIBRARY_INCLUDED
-    void internal_test() {
-        // https://en.cppreference.com/w/cpp/memory/allocator
-        // default allocator is stateless, i.e. instances compare equal:
-        CHECK(get_allocator() == allocator_);
-        CHECK_THROWS(grow(max_size() + 1));
-        CHECK_THROWS(add_sizes(max_size() - 1, 2));
-    }
-#endif
-
-protected:
-    void init_capacity(size_type new_cap) {
-        data_ = allocator_traits::allocate(allocator_, new_cap);
-        capacity_ = new_cap;
-    }
-    void grow_capacity(size_type new_cap) {
-        value_type* new_data = allocator_traits::allocate(allocator_, new_cap);
-        // copy data
-        traits_type::copy(new_data, data(), size());
-        // deallocate old data & assign new
-        if (data_ != fixed_buffer())
-            allocator_traits::deallocate(allocator_, data_, capacity_);
-        data_ = new_data;
-        capacity_ = new_cap;
-    }
-
-    // https://cs.chromium.org/chromium/src/url/url_canon.h
-    // Grows the given buffer so that it can fit at least |min_cap|
-    // characters. Throws std::length_error() if min_cap is too big.
-    void grow(size_type min_cap) {
-        static const size_type kMinBufferLen = 16;
-        size_type new_cap = (capacity_ == 0) ? kMinBufferLen : capacity_;
-        do {
-            if (new_cap > (max_size() >> 1))  // Prevent overflow below.
-                throw std::length_error("too big size");
-            new_cap *= 2;
-        } while (new_cap < min_cap);
-        reserve(new_cap);
-    }
-
-    // add without overflow
-    size_type add_sizes(size_type n1, size_type n2) const {
-        if (max_size() - n1 >= n2)
-            return n1 + n2;
-        throw std::length_error("too big size");
-    }
-
-private:
-    value_type* fixed_buffer() noexcept {
-        return fixed_buffer_.data();
-    }
-
-private:
-    allocator_type allocator_;
-    value_type* data_ = fixed_buffer();
-    size_type size_ = 0;
-    size_type capacity_ = fixed_capacity;
-
-    // fixed size buffer
-    std::array<value_type, fixed_capacity> fixed_buffer_;
-};
-
-} // namespace upa
-
-#endif // UPA_BUFFER_H
-
 // #include "config.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -226,9 +39,11 @@ private:
 #ifndef UPA_CONFIG_H
 #define UPA_CONFIG_H
 
-#if __has_include(<version>)
-# include <version> // IWYU pragma: export
-#endif
+#ifndef UPA_MODULE
+# if __has_include(<version>)
+#  include <version> // IWYU pragma: export
+# endif
+#endif // UPA_MODULE
 
 // Macros for compilers that support the C++20 or later standard
 // https://devblogs.microsoft.com/cppblog/msvc-now-correctly-reports-__cplusplus/
@@ -237,6 +52,13 @@ private:
 # define UPA_CONSTEXPR_20 constexpr
 #else
 # define UPA_CONSTEXPR_20 inline
+#endif
+
+// C++23
+#if defined(_MSVC_LANG) ? (_MSVC_LANG >= 202302) : (__cplusplus >= 202302)
+# define UPA_CONSTEXPR_23 constexpr
+#else
+# define UPA_CONSTEXPR_23 inline
 #endif
 
 // Define UPA_API macro to mark symbols for export/import
@@ -251,9 +73,23 @@ private:
 # elif defined(__clang__) || defined(__GNUC__)
 #  define UPA_API __attribute__((visibility ("default")))
 # endif
+# if defined(__clang__) || defined(__GNUC__)
+#  define UPA_SO_VISIBLE __attribute__((visibility ("default")))
+# endif
 #endif
 #ifndef UPA_API
 # define UPA_API
+#endif
+#ifndef UPA_SO_VISIBLE
+# define UPA_SO_VISIBLE
+#endif
+
+// The following macros have values when the library is compiled as a module
+
+#ifndef UPA_EXPORT
+# define UPA_EXPORT
+# define UPA_EXPORT_BEGIN
+# define UPA_EXPORT_END
 #endif
 
 // Attributes
@@ -287,9 +123,201 @@ private:
 #endif
 
 #endif // UPA_CONFIG_H
-             // IWYU pragma: export
+
+
+#ifndef UPA_MODULE
+# include <array>
+# include <cstddef>
+# include <memory>
+# include <stdexcept>
+# include <string>
+#endif // UPA_MODULE
+
+namespace upa {
+
+template <
+    class T,
+    std::size_t fixed_capacity = 1024,
+    class Traits = std::char_traits<T>,
+    class Allocator = std::allocator<T>
+>
+class simple_buffer {
+public:
+    using value_type = T ;
+    using traits_type = Traits;
+    using allocator_type = Allocator;
+    using allocator_traits = std::allocator_traits<allocator_type>;
+    using size_type = std::size_t;
+    // iterator
+    using const_iterator = const value_type*;
+
+    // default
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
+    UPA_CONSTEXPR_20 simple_buffer() noexcept(noexcept(Allocator())) = default;
+    UPA_CONSTEXPR_20 explicit simple_buffer(const Allocator& alloc) noexcept
+        : allocator_(alloc)
+    {}
+
+    // with initial capacity
+    UPA_CONSTEXPR_20 explicit simple_buffer(size_type new_cap, const Allocator& alloc = Allocator())
+        : allocator_(alloc)
+    {
+        if (new_cap > fixed_capacity)
+            init_capacity(new_cap);
+    }
+
+    // disable copy/move
+    simple_buffer(const simple_buffer&) = delete;
+    simple_buffer(simple_buffer&&) = delete;
+    simple_buffer& operator=(const simple_buffer&) = delete;
+    simple_buffer& operator=(simple_buffer&&) = delete;
+
+    UPA_CONSTEXPR_20 ~simple_buffer() {
+        if (data_ != fixed_buffer())
+            allocator_traits::deallocate(allocator_, data_, capacity_);
+    }
+
+    UPA_CONSTEXPR_20 allocator_type get_allocator() const noexcept {
+        return allocator_;
+    }
+
+    UPA_CONSTEXPR_20 value_type* data() noexcept {
+        return data_;
+    }
+    UPA_CONSTEXPR_20 const value_type* data() const noexcept {
+        return data_;
+    }
+
+    UPA_CONSTEXPR_20 const_iterator begin() const noexcept {
+        return data_;
+    }
+    UPA_CONSTEXPR_20 const_iterator end() const noexcept {
+        return data_ + size_;
+    }
+
+    // Capacity
+    UPA_CONSTEXPR_20 bool empty() const noexcept {
+        return size_ == 0;
+    }
+    UPA_CONSTEXPR_20 size_type size() const noexcept {
+        return size_;
+    }
+    UPA_CONSTEXPR_20 size_type max_size() const noexcept {
+        return allocator_traits::max_size(allocator_);
+    }
+    UPA_CONSTEXPR_20 size_type capacity() const noexcept {
+        return capacity_;
+    }
+
+    UPA_CONSTEXPR_20 void reserve(size_type new_cap) {
+        if (new_cap > capacity_)
+            grow_capacity(new_cap);
+    }
+
+    // Modifiers
+    UPA_CONSTEXPR_20 void clear() noexcept {
+        size_ = 0;
+    }
+
+    UPA_CONSTEXPR_20 void append(const value_type* first, const value_type* last) {
+        const auto ncopy = std::distance(first, last);
+        const size_type new_size = add_sizes(size_, ncopy);
+        if (new_size > capacity_)
+            grow(new_size);
+        // copy
+        traits_type::copy(data_ + size_, first, ncopy);
+        // new size
+        size_ = new_size;
+    }
+
+    UPA_CONSTEXPR_20 void push_back(const value_type& value) {
+        if (size_ < capacity_) {
+            data_[size_] = value;
+            ++size_;
+            return;
+        }
+        // grow buffer capacity
+        grow(add_sizes(size_, 1));
+        data_[size_] = value;
+        ++size_;
+    }
+    UPA_CONSTEXPR_20 void pop_back() {
+        --size_;
+    }
+    UPA_CONSTEXPR_20 void resize(size_type count) {
+        reserve(count);
+        size_ = count;
+    }
+
+#ifdef DOCTEST_LIBRARY_INCLUDED
+    inline void internal_test() {
+        // https://en.cppreference.com/w/cpp/memory/allocator
+        // default allocator is stateless, i.e. instances compare equal:
+        CHECK(get_allocator() == allocator_);
+        CHECK_THROWS(grow(max_size() + 1));
+        CHECK_THROWS(add_sizes(max_size() - 1, 2));
+    }
+#endif
+
+protected:
+    UPA_CONSTEXPR_20 void init_capacity(size_type new_cap) {
+        data_ = allocator_traits::allocate(allocator_, new_cap);
+        capacity_ = new_cap;
+    }
+    UPA_CONSTEXPR_20 void grow_capacity(size_type new_cap) {
+        value_type* new_data = allocator_traits::allocate(allocator_, new_cap);
+        // copy data
+        traits_type::copy(new_data, data(), size());
+        // deallocate old data & assign new
+        if (data_ != fixed_buffer())
+            allocator_traits::deallocate(allocator_, data_, capacity_);
+        data_ = new_data;
+        capacity_ = new_cap;
+    }
+
+    // https://cs.chromium.org/chromium/src/url/url_canon.h
+    // Grows the given buffer so that it can fit at least |min_cap|
+    // characters. Throws std::length_error() if min_cap is too big.
+    UPA_CONSTEXPR_20 void grow(size_type min_cap) {
+        constexpr size_type kMinBufferLen = 16;
+        size_type new_cap = (capacity_ == 0) ? kMinBufferLen : capacity_;
+        do {
+            if (new_cap > (max_size() >> 1))  // Prevent overflow below.
+                throw std::length_error("too big size");
+            new_cap *= 2;
+        } while (new_cap < min_cap);
+        reserve(new_cap);
+    }
+
+    // add without overflow
+    UPA_CONSTEXPR_20 size_type add_sizes(size_type n1, size_type n2) const {
+        if (max_size() - n1 >= n2)
+            return n1 + n2;
+        throw std::length_error("too big size");
+    }
+
+private:
+    UPA_CONSTEXPR_20 value_type* fixed_buffer() noexcept {
+        return fixed_buffer_.data();
+    }
+
+private:
+    allocator_type allocator_;
+    value_type* data_ = fixed_buffer();
+    size_type size_ = 0;
+    size_type capacity_ = fixed_capacity;
+
+    // fixed size buffer
+    std::array<value_type, fixed_capacity> fixed_buffer_;
+};
+
+} // namespace upa
+
+#endif // UPA_BUFFER_H
+
+// #include "config.h"             // IWYU pragma: export
 // #include "str_arg.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -298,8 +326,8 @@ private:
 // Usage example:
 
 template <class StrT, enable_if_str_arg_t<StrT> = 0>
-inline void procfn(StrT&& str) {
-    const auto inp = make_str_arg(std::forward<StrT>(str));
+inline void procfn(const StrT& str) {
+    const auto inp = make_str_arg(str);
     const auto* first = inp.begin();
     const auto* last = inp.end();
     // do something with first ... last
@@ -310,9 +338,8 @@ inline void procfn(StrT&& str) {
 #define UPA_STR_ARG_H
 
 // #include "config.h"
-
 // #include "url_utf.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -323,10 +350,9 @@ inline void procfn(StrT&& str) {
 #ifndef UPA_URL_UTF_H
 #define UPA_URL_UTF_H
 
-// #include "config.h"
- // IWYU pragma: export
+// #include "config.h" // IWYU pragma: export
 // #include "url_result.h"
-// Copyright 2016-2023 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -334,9 +360,15 @@ inline void procfn(StrT&& str) {
 #ifndef UPA_URL_RESULT_H
 #define UPA_URL_RESULT_H
 
-#include <stdexcept>
+// #include "config.h"
+
+#ifndef UPA_MODULE
+# include <stdexcept>
+#endif // UPA_MODULE
 
 namespace upa {
+
+UPA_EXPORT_BEGIN
 
 /// @brief URL validation and other error codes
 ///
@@ -373,7 +405,7 @@ enum class validation_errc {
     // IDNA
     domain_to_ascii,                ///< Unicode ToASCII records an error or returns the empty string
     // Host parsing
-    domain_invalid_code_point,      ///< The input’s host contains a forbidden domain code point
+    domain_invalid_code_point [[deprecated]], ///< Unused, use domain_to_ascii instead
     host_invalid_code_point,        ///< An opaque host contains a forbidden host code point
     ipv4_too_many_parts,            ///< An IPv4 address does not consist of exactly 4 parts
     ipv4_non_numeric_part,          ///< An IPv4 address part is not numeric
@@ -422,25 +454,26 @@ enum class validation_errc {
 }
 
 /// @brief URL exception class
-
-class url_error : public std::runtime_error {
+class UPA_SO_VISIBLE url_error : public std::runtime_error {
 public:
     /// constructs a new url_error object with the given result code and error message
     ///
     /// @param[in] res validation error code
     /// @param[in] what_arg error message
-    explicit url_error(validation_errc res, const char* what_arg)
+    inline explicit url_error(validation_errc res, const char* what_arg)
         : std::runtime_error(what_arg)
         , res_(res)
     {}
 
     /// @return validation error code
-    [[nodiscard]] validation_errc result() const noexcept {
+    [[nodiscard]] inline validation_errc result() const noexcept {
         return res_;
     }
 private:
     validation_errc res_;
 };
+
+UPA_EXPORT_END
 
 namespace detail {
 
@@ -465,27 +498,29 @@ struct result_value {
 
 #endif // UPA_URL_RESULT_H
 
-#include <cstdint> // uint8_t, uint32_t
-#include <string>
-#include <string_view>
 
+#ifndef UPA_MODULE
+# include <cstdint> // uint8_t, uint32_t
+# include <string>
+# include <string_view>
+#endif // UPA_MODULE
 
 namespace upa {
 
 class url_utf {
 public:
     template <typename CharT>
-    static constexpr detail::result_value<uint32_t> read_utf_char(const CharT*& first, const CharT* last) noexcept;
+    static constexpr detail::result_value<std::uint32_t> read_utf_char(const CharT*& first, const CharT* last) noexcept;
 
     template <typename CharT>
-    static void read_char_append_utf8(const CharT*& it, const CharT* last, std::string& output);
-    static void read_char_append_utf8(const char*& it, const char* last, std::string& output);
+    static UPA_CONSTEXPR_20 void read_char_append_utf8(const CharT*& it, const CharT* last, std::string& output);
+    static UPA_CONSTEXPR_20 void read_char_append_utf8(const char*& it, const char* last, std::string& output);
 
     template <class Output, void appendByte(unsigned char, Output&)>
-    static void append_utf8(uint32_t code_point, Output& output);
+    static UPA_CONSTEXPR_20 void append_utf8(std::uint32_t code_point, Output& output);
 
     template <class Output>
-    static void append_utf16(uint32_t code_point, Output& output);
+    static UPA_CONSTEXPR_20 void append_utf16(std::uint32_t code_point, Output& output);
 
     // Convert to utf-8 string
     static UPA_API std::string to_utf8_string(const char16_t* first, const char16_t* last);
@@ -497,13 +532,15 @@ public:
     static UPA_API int compare_by_code_units(const char* first1, const char* last1, const char* first2, const char* last2) noexcept;
 protected:
     // low level
-    static constexpr bool read_code_point(const char*& first, const char* last, uint32_t& code_point) noexcept;
-    static constexpr bool read_code_point(const char16_t*& first, const char16_t* last, uint32_t& code_point) noexcept;
-    static constexpr bool read_code_point(const char32_t*& first, const char32_t* last, uint32_t& code_point) noexcept;
+    static constexpr bool read_code_point(const char*& first, const char* last, std::uint32_t& code_point) noexcept;
+    static constexpr bool read_code_point(const char16_t*& first, const char16_t* last, std::uint32_t& code_point) noexcept;
+    static constexpr bool read_code_point(const char32_t*& first, const char32_t* last, std::uint32_t& code_point) noexcept;
 private:
     // Replacement character (U+FFFD)
     static constexpr std::string_view kReplacementCharUtf8{ "\xEF\xBF\xBD" };
+};
 
+namespace detail {
     // Following two arrays have values from corresponding macros in ICU 74.1 library's
     // include\unicode\utf8.h file.
 
@@ -511,17 +548,23 @@ private:
     // Each bit indicates whether one lead byte + first trail byte pair starts a valid sequence.
     // Lead byte E0..EF bits 3..0 are used as byte index,
     // first trail byte bits 7..5 are used as bit index into that byte.
-    static constexpr uint8_t k_U8_LEAD3_T1_BITS[16] = {
+    inline constexpr std::uint8_t k_U8_LEAD3_T1_BITS[16] = {
         0x20, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x10, 0x30, 0x30
     };
     // Internal bit vector for 4-byte UTF-8 validity check, for use in U8_IS_VALID_LEAD4_AND_T1.
     // Each bit indicates whether one lead byte + first trail byte pair starts a valid sequence.
     // First trail byte bits 7..4 are used as byte index,
     // lead byte F0..F4 bits 2..0 are used as bit index into that byte.
-    static constexpr uint8_t k_U8_LEAD4_T1_BITS[16] = {
+    inline constexpr std::uint8_t k_U8_LEAD4_T1_BITS[16] = {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1E, 0x0F, 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00
     };
-};
+
+    // For use with append_utf8 function. It appends a byte to output string.
+    template <typename CharT>
+    UPA_CONSTEXPR_20 void append_to_string(std::uint8_t c, std::basic_string<CharT>& str) {
+        str.push_back(static_cast<CharT>(c));
+    };
+} // namespace detail
 
 
 // The URL class (https://url.spec.whatwg.org/#url-class) in URL Standard uses
@@ -543,29 +586,22 @@ private:
 // and advances `first` to point to the next character.
 
 template <typename CharT>
-constexpr detail::result_value<uint32_t> url_utf::read_utf_char(const CharT*& first, const CharT* last) noexcept {
+constexpr detail::result_value<std::uint32_t> url_utf::read_utf_char(const CharT*& first, const CharT* last) noexcept {
     // read_code_point always initializes code_point
-    uint32_t code_point{};
+    std::uint32_t code_point{};
     if (read_code_point(first, last, code_point))
         return { true, code_point };
     return { false, 0xFFFD }; // REPLACEMENT CHARACTER
 }
 
-namespace detail {
-    template <typename CharT>
-    inline void append_to_string(uint8_t c, std::basic_string<CharT>& str) {
-        str.push_back(static_cast<CharT>(c));
-    };
-} // namespace detail
-
 template <typename CharT>
-inline void url_utf::read_char_append_utf8(const CharT*& it, const CharT* last, std::string& output) {
-    const uint32_t code_point = read_utf_char(it, last).value;
+UPA_CONSTEXPR_20 void url_utf::read_char_append_utf8(const CharT*& it, const CharT* last, std::string& output) {
+    const std::uint32_t code_point = read_utf_char(it, last).value;
     append_utf8<std::string, detail::append_to_string>(code_point, output);
 }
 
-inline void url_utf::read_char_append_utf8(const char*& it, const char* last, std::string& output) {
-    uint32_t code_point; // NOLINT(cppcoreguidelines-init-variables)
+UPA_CONSTEXPR_20 void url_utf::read_char_append_utf8(const char*& it, const char* last, std::string& output) {
+    std::uint32_t code_point; // NOLINT(cppcoreguidelines-init-variables)
     const char* start = it;
     if (read_code_point(it, last, code_point))
         output.append(start, it);
@@ -585,28 +621,28 @@ inline void url_utf::read_char_append_utf8(const char*& it, const char* last, st
 
 // Modified version of the U8_INTERNAL_NEXT_OR_SUB macro in utf8.h from ICU
 
-constexpr bool url_utf::read_code_point(const char*& first, const char* last, uint32_t& c) noexcept {
-    c = static_cast<uint8_t>(*first++);
+constexpr bool url_utf::read_code_point(const char*& first, const char* last, std::uint32_t& c) noexcept {
+    c = static_cast<std::uint8_t>(*first++);
     if (c & 0x80) {
-        uint8_t tmp = 0;
+        std::uint8_t tmp = 0;
         // NOLINTBEGIN(bugprone-assignment-in-if-condition)
         if (first != last &&
             // fetch/validate/assemble all but last trail byte
             (c >= 0xE0 ?
                 (c < 0xF0 ? // U+0800..U+FFFF except surrogates
-                    k_U8_LEAD3_T1_BITS[c &= 0xF] & (1 << ((tmp = static_cast<uint8_t>(*first)) >> 5)) &&
+                    detail::k_U8_LEAD3_T1_BITS[c &= 0xF] & (1 << ((tmp = static_cast<std::uint8_t>(*first)) >> 5)) &&
                     (tmp &= 0x3F, 1)
                     : // U+10000..U+10FFFF
                     (c -= 0xF0) <= 4 &&
-                    k_U8_LEAD4_T1_BITS[(tmp = static_cast<uint8_t>(*first)) >> 4] & (1 << c) &&
+                    detail::k_U8_LEAD4_T1_BITS[(tmp = static_cast<std::uint8_t>(*first)) >> 4] & (1 << c) &&
                     (c = (c << 6) | (tmp & 0x3F), ++first != last) &&
-                    (tmp = static_cast<uint8_t>(static_cast<uint8_t>(*first) - 0x80)) <= 0x3F) &&
+                    (tmp = static_cast<std::uint8_t>(static_cast<std::uint8_t>(*first) - 0x80)) <= 0x3F) &&
                 // valid second-to-last trail byte
                 (c = (c << 6) | tmp, ++first != last)
                 : // U+0080..U+07FF
                 c >= 0xC2 && (c &= 0x1F, 1)) &&
             // last trail byte
-            (tmp = static_cast<uint8_t>(static_cast<uint8_t>(*first) - 0x80)) <= 0x3F &&
+            (tmp = static_cast<std::uint8_t>(static_cast<std::uint8_t>(*first) - 0x80)) <= 0x3F &&
             (c = (c << 6) | tmp, ++first, 1)) {
             // valid utf-8
         } else {
@@ -654,15 +690,15 @@ namespace detail {
     // Get a supplementary code point value (U+10000..U+10ffff)
     // from its lead and trail surrogates.
     // Based on U16_GET_SUPPLEMENTARY in utf16.h from ICU
-    constexpr uint32_t u16_get_supplementary(uint32_t lead, uint32_t trail) noexcept {
-        constexpr uint32_t u16_surrogate_offset = (0xd800 << 10UL) + 0xdc00 - 0x10000;
+    constexpr std::uint32_t u16_get_supplementary(std::uint32_t lead, std::uint32_t trail) noexcept {
+        constexpr std::uint32_t u16_surrogate_offset = (0xd800 << 10UL) + 0xdc00 - 0x10000;
         return (lead << 10UL) + trail - u16_surrogate_offset;
     }
 } // namespace detail
 
 // Modified version of the U16_NEXT_OR_FFFD macro in utf16.h from ICU
 
-constexpr bool url_utf::read_code_point(const char16_t*& first, const char16_t* last, uint32_t& c) noexcept {
+constexpr bool url_utf::read_code_point(const char16_t*& first, const char16_t* last, std::uint32_t& c) noexcept {
     c = *first++;
     if (detail::u16_is_surrogate(c)) {
         if (detail::u16_is_surrogate_lead(c) && first != last && detail::u16_is_trail(*first)) {
@@ -676,7 +712,7 @@ constexpr bool url_utf::read_code_point(const char16_t*& first, const char16_t* 
     return true;
 }
 
-constexpr bool url_utf::read_code_point(const char32_t*& first, const char32_t*, uint32_t& c) noexcept {
+constexpr bool url_utf::read_code_point(const char32_t*& first, const char32_t*, std::uint32_t& c) noexcept {
     // no conversion
     c = *first++;
     // don't allow surogates (U+D800..U+DFFF) and too high values
@@ -691,23 +727,23 @@ constexpr bool url_utf::read_code_point(const char32_t*& first, const char32_t*,
 // It converts code_point to UTF-8 bytes sequence and calls appendByte function for each byte.
 // It assumes a valid code point (https://infra.spec.whatwg.org/#scalar-value).
 
-template <class Output, void appendByte(uint8_t, Output&)>
-inline void url_utf::append_utf8(uint32_t code_point, Output& output) {
+template <class Output, void appendByte(std::uint8_t, Output&)>
+UPA_CONSTEXPR_20 void url_utf::append_utf8(std::uint32_t code_point, Output& output) {
     if (code_point <= 0x7f) {
-        appendByte(static_cast<uint8_t>(code_point), output);
+        appendByte(static_cast<std::uint8_t>(code_point), output);
     } else {
         if (code_point <= 0x7ff) {
-            appendByte(static_cast<uint8_t>((code_point >> 6) | 0xc0), output);
+            appendByte(static_cast<std::uint8_t>((code_point >> 6) | 0xc0), output);
         } else {
             if (code_point <= 0xffff) {
-                appendByte(static_cast<uint8_t>((code_point >> 12) | 0xe0), output);
+                appendByte(static_cast<std::uint8_t>((code_point >> 12) | 0xe0), output);
             } else {
-                appendByte(static_cast<uint8_t>((code_point >> 18) | 0xf0), output);
-                appendByte(static_cast<uint8_t>(((code_point >> 12) & 0x3f) | 0x80), output);
+                appendByte(static_cast<std::uint8_t>((code_point >> 18) | 0xf0), output);
+                appendByte(static_cast<std::uint8_t>(((code_point >> 12) & 0x3f) | 0x80), output);
             }
-            appendByte(static_cast<uint8_t>(((code_point >> 6) & 0x3f) | 0x80), output);
+            appendByte(static_cast<std::uint8_t>(((code_point >> 6) & 0x3f) | 0x80), output);
         }
-        appendByte(static_cast<uint8_t>((code_point & 0x3f) | 0x80), output);
+        appendByte(static_cast<std::uint8_t>((code_point & 0x3f) | 0x80), output);
     }
 }
 
@@ -717,7 +753,7 @@ inline void url_utf::append_utf8(uint32_t code_point, Output& output) {
 // It assumes a valid code point (https://infra.spec.whatwg.org/#scalar-value).
 
 template <class Output>
-inline void url_utf::append_utf16(uint32_t code_point, Output& output) {
+UPA_CONSTEXPR_20 void url_utf::append_utf16(std::uint32_t code_point, Output& output) {
     if (code_point <= 0xffff) {
         output.push_back(static_cast<char16_t>(code_point));
     } else {
@@ -732,7 +768,7 @@ inline void url_utf::append_utf16(uint32_t code_point, Output& output) {
 #endif // UPA_URL_UTF_H
 
 // #include "util.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -742,17 +778,19 @@ inline void url_utf::append_utf16(uint32_t code_point, Output& output) {
 
 // #include "config.h"
 
-#include <algorithm>
-#include <cassert>
-#include <cstddef>
-#include <limits>
-#ifdef __cpp_lib_start_lifetime_as
-# include <memory>
-#endif
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <type_traits>
+#ifndef UPA_MODULE
+# include <algorithm>
+# include <cassert>
+# include <cstddef>
+# include <limits>
+# ifdef __cpp_lib_start_lifetime_as
+#  include <memory>
+# endif
+# include <stdexcept>
+# include <string>
+# include <string_view>
+# include <type_traits>
+#endif // UPA_MODULE
 
 namespace upa::util {
 
@@ -819,10 +857,10 @@ constexpr auto to_unsigned(T n) noexcept -> UT {
 
 // Append unsigned integer to string
 
-template <typename UIntT>
-inline void unsigned_to_str(UIntT num, std::string& output, UIntT base) {
-    static const char digit[] = "0123456789abcdef";
+inline constexpr char kHexDigit[] = "0123456789abcdef";
 
+template <typename UIntT>
+UPA_CONSTEXPR_20 void unsigned_to_str(UIntT num, std::string& output, UIntT base) {
     // count digits
     std::size_t count = output.length() + 1;
     // one division is needed to prevent the multiplication overflow
@@ -833,7 +871,7 @@ inline void unsigned_to_str(UIntT num, std::string& output, UIntT base) {
 
     // convert
     do {
-        output[--count] = digit[num % base];
+        output[--count] = kHexDigit[num % base];
         num /= base;
     } while (num);
 }
@@ -869,12 +907,20 @@ constexpr std::size_t add_sizes(std::size_t size1, std::size_t size2, std::size_
     return size1 + size2;
 }
 
+// This function does not reduce the capacity of the string if it is greater
+// than new_cap, to avoid unnecessary memory reallocations in some cases.
+template <class CharT>
+UPA_CONSTEXPR_20 void reserve(std::basic_string<CharT>& str, std::size_t new_cap) {
+    if (str.capacity() < new_cap)
+        str.reserve(new_cap);
+}
+
 template <class CharT, class StrT>
-inline void append(std::basic_string<CharT>& dest, const StrT& src) {
+UPA_CONSTEXPR_20 void append(std::basic_string<CharT>& dest, const StrT& src) {
 #ifdef _MSC_VER
     if constexpr (!std::is_same_v<typename StrT::value_type, CharT>) {
         // the value_type of dest and src are different
-        dest.reserve(add_sizes(dest.size(), src.size(), dest.max_size()));
+        reserve(dest, add_sizes(dest.size(), src.size(), dest.max_size()));
         for (const auto c : src)
             dest.push_back(static_cast<CharT>(c));
     } else
@@ -883,7 +929,7 @@ inline void append(std::basic_string<CharT>& dest, const StrT& src) {
 }
 
 template <class CharT, class UnaryOperation>
-inline void append_tr(std::string& dest, const CharT* first, const CharT* last, UnaryOperation unary_op) {
+UPA_CONSTEXPR_20 void append_tr(std::string& dest, const CharT* first, const CharT* last, UnaryOperation unary_op) {
     const std::size_t old_size = dest.size();
     const std::size_t src_size = last - first;
     const std::size_t new_size = add_sizes(old_size, src_size, dest.max_size());
@@ -905,31 +951,21 @@ constexpr char ascii_to_lower_char(CharT c) noexcept {
 }
 
 template <class CharT>
-inline void append_ascii_lowercase(std::string& dest, const CharT* first, const CharT* last) {
+UPA_CONSTEXPR_20 void append_ascii_lowercase(std::string& dest, const CharT* first, const CharT* last) {
     util::append_tr(dest, first, last, ascii_to_lower_char<CharT>);
 }
 
 // Finders
 
 template <class InputIt>
-inline bool contains_null(InputIt first, InputIt last) {
+UPA_CONSTEXPR_20 bool contains_null(InputIt first, InputIt last) {
     return std::find(first, last, '\0') != last;
 }
 
 template <class CharT>
-constexpr bool has_xn_label(const CharT* first, const CharT* last) {
-    if (last - first >= 4) {
-        // search for labels starting with "xn--"
-        const auto end = last - 4;
-        for (auto p = first; ; ++p) { // skip '.'
-            // "XN--", "xn--", ...
-            if ((p[0] | 0x20) == 'x' && (p[1] | 0x20) == 'n' && p[2] == '-' && p[3] == '-')
-                return true;
-            p = std::char_traits<CharT>::find(p, end - p, '.');
-            if (p == nullptr) break;
-        }
-    }
-    return false;
+UPA_CONSTEXPR_20 bool is_ascii(const CharT* first, const CharT* last) {
+    using UCharT = std::make_unsigned_t<CharT>;
+    return std::all_of(first, last, [](CharT c) { return static_cast<UCharT>(c) < 0x80; });
 }
 
 
@@ -937,18 +973,24 @@ constexpr bool has_xn_label(const CharT* first, const CharT* last) {
 
 #endif // UPA_UTIL_H
 
-#include <cassert>
-#include <cstddef>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <utility>
+
+#ifndef UPA_MODULE
+# include <cassert>
+# include <cstddef>
+# include <optional>
+# include <string>
+# include <string_view>
+# include <type_traits>
+# include <utility>
+#endif // UPA_MODULE
 
 namespace upa {
 
 // String view type
 
-using string_view = std::string_view;
+using string_view [[deprecated("Use std::string_view instead.")]] = std::string_view;
+
+UPA_EXPORT_BEGIN
 
 // Supported char and size types
 
@@ -1020,6 +1062,9 @@ public:
     constexpr const value_type* data() const noexcept {
         return first_;
     }
+    constexpr bool empty() const noexcept {
+        return first_ == last_;
+    }
     constexpr std::size_t length() const noexcept {
         return last_ - first_;
     }
@@ -1048,6 +1093,8 @@ using remove_cvptr_t = std::remove_cv_t<std::remove_pointer_t<T>>;
 
 template<class T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+UPA_EXPORT_END
 
 namespace detail {
 
@@ -1132,6 +1179,7 @@ struct str_arg_char_default<StrT, std::enable_if_t<
 
 } // namespace detail
 
+UPA_EXPORT_BEGIN
 
 // Requirements for string arguments
 
@@ -1156,6 +1204,7 @@ struct str_arg_char<str_arg<CharT>> {
     }
 };
 
+UPA_EXPORT_END
 
 // String arguments helper types
 
@@ -1175,8 +1224,8 @@ using enable_if_str_arg_t = std::enable_if_t<
 // String arguments helper function
 
 template <class StrT>
-constexpr auto make_str_arg(StrT&& str) -> str_arg<str_arg_char_t<StrT>> {
-    return str_arg_char_s<StrT>::to_str_arg(std::forward<StrT>(str));
+constexpr auto make_str_arg(const StrT& str) -> str_arg<str_arg_char_t<StrT>> {
+    return str_arg_char_s<StrT>::to_str_arg(str);
 }
 
 
@@ -1206,22 +1255,59 @@ using enable_if_str_arg_to_charW_t = std::enable_if_t<
     is_charW_type_v<str_arg_char_t<StrT>>,
     int>;
 
+UPA_EXPORT_BEGIN
 
-inline std::string&& make_string(std::string&& str) {
+UPA_CONSTEXPR_20 std::string&& make_string(std::string&& str) {
     return std::move(str);
 }
 
 template <class StrT, enable_if_str_arg_to_char8_t<StrT> = 0>
-constexpr string_view make_string(StrT&& str) {
-    const auto inp = make_str_arg(std::forward<StrT>(str));
+constexpr std::string_view make_string(const StrT& str) {
+    const auto inp = make_str_arg(str);
     return { inp.data(), inp.length() };
 }
 
 template <class StrT, enable_if_str_arg_to_charW_t<StrT> = 0>
-inline std::string make_string(StrT&& str) {
-    const auto inp = make_str_arg(std::forward<StrT>(str));
+inline std::string make_string(const StrT& str) {
+    const auto inp = make_str_arg(str);
     return url_utf::to_utf8_string(inp.begin(), inp.end());
 }
+
+UPA_EXPORT_END
+
+// Support for optional string arguments
+
+namespace detail {
+
+struct str_arg_test {
+    template <class StrT, enable_if_str_arg_t<StrT> = 0>
+    constexpr str_arg_test(const StrT&) {}
+};
+
+template <class>
+inline constexpr bool is_just_optional_v = false;
+
+template <class T>
+inline constexpr bool is_just_optional_v<std::optional<T>> = true;
+
+} // namespace detail
+
+// Helpers for optional string arguments
+
+// The upa::nullopt can be used instead of std::nullopt to provide a workaround for the MSVC bug
+// https://developercommunity.visualstudio.com/t/The-C2039:-nullopt:-is-not-a-member-o/11099621
+UPA_EXPORT inline constexpr auto nullopt = std::nullopt;
+
+template<class OptStrT>
+using enable_if_optional_str_arg_t = std::enable_if_t<
+    std::is_convertible_v<std::decay_t<OptStrT>, std::optional<detail::str_arg_test>>,
+    int>;
+
+template <class T>
+inline constexpr bool is_nullopt_v = std::is_same_v<std::decay_t<T>, std::nullopt_t>;
+
+template <class T>
+inline constexpr bool is_optional_v = detail::is_just_optional_v<std::decay_t<T>>;
 
 
 } // namespace upa
@@ -1229,7 +1315,7 @@ inline std::string make_string(StrT&& str) {
 #endif // UPA_STR_ARG_H
             // IWYU pragma: export
 // #include "url_host.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1238,11 +1324,9 @@ inline std::string make_string(StrT&& str) {
 #define UPA_URL_HOST_H
 
 // #include "buffer.h"
-
 // #include "config.h"
-
 // #include "idna.h"
-// Copyright 2017-2025 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1250,7 +1334,7 @@ inline std::string make_string(StrT&& str) {
 #define UPA_IDNA_H
 
 // #include "idna/idna.h"
-// Copyright 2017-2025 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1293,7 +1377,56 @@ inline std::string make_string(StrT&& str) {
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include<type_traits>
+// #include "config.h"
+// Copyright 2025-2026 Rimas Misevičius
+// Distributed under the BSD-style license that can be
+// found in the LICENSE file.
+//
+#ifndef UPA_IDNA_CONFIG_H
+#define UPA_IDNA_CONFIG_H
+
+// Macros for compilers that support the C++20 or later standard
+// https://devblogs.microsoft.com/cppblog/msvc-now-correctly-reports-__cplusplus/
+#if defined(_MSVC_LANG) ? (_MSVC_LANG >= 202002) : (__cplusplus >= 202002)
+# define UPA_IDNA_CPP_20
+# define UPA_IDNA_CONSTEXPR_20 constexpr
+#else
+# define UPA_IDNA_CONSTEXPR_20 inline
+#endif
+
+// Define UPA_IDNA_API macro to mark symbols for export/import
+// when compiling as shared library
+#if defined (UPA_LIB_EXPORT) || defined (UPA_LIB_IMPORT)
+# ifdef _MSC_VER
+#  ifdef UPA_LIB_EXPORT
+#   define UPA_IDNA_API __declspec(dllexport)
+#  else
+#   define UPA_IDNA_API __declspec(dllimport)
+#  endif
+# elif defined(__clang__) || defined(__GNUC__)
+#  define UPA_IDNA_API __attribute__((visibility ("default")))
+# endif
+#endif
+#ifndef UPA_IDNA_API
+# define UPA_IDNA_API
+#endif
+
+// The following macros have values when the library is compiled as a module
+
+#ifndef UPA_EXPORT
+# define UPA_EXPORT
+# define UPA_EXPORT_BEGIN
+# define UPA_EXPORT_END
+#endif
+
+#endif // UPA_IDNA_CONFIG_H
+
+
+#ifndef UPA_MODULE
+# include<type_traits>
+#endif // UPA_MODULE
+
+UPA_EXPORT_BEGIN
 
 namespace upa::idna {
 
@@ -1364,37 +1497,14 @@ operator^=(E& lhs, E rhs) noexcept {
     return lhs;
 }
 
+UPA_EXPORT_END
+
 #endif // UPA_IDNA_BITMASK_OPERATORS_HPP
 
 // #include "config.h"
-// Copyright 2025 Rimas Misevičius
-// Distributed under the BSD-style license that can be
-// found in the LICENSE file.
-//
-#ifndef UPA_IDNA_CONFIG_H
-#define UPA_IDNA_CONFIG_H
-
-// Define UPA_IDNA_API macro to mark symbols for export/import
-// when compiling as shared library
-#if defined (UPA_LIB_EXPORT) || defined (UPA_LIB_IMPORT)
-# ifdef _MSC_VER
-#  ifdef UPA_LIB_EXPORT
-#   define UPA_IDNA_API __declspec(dllexport)
-#  else
-#   define UPA_IDNA_API __declspec(dllimport)
-#  endif
-# elif defined(__clang__) || defined(__GNUC__)
-#  define UPA_IDNA_API __attribute__((visibility ("default")))
-# endif
-#endif
-#ifndef UPA_IDNA_API
-# define UPA_IDNA_API
-#endif
-
-#endif // UPA_IDNA_CONFIG_H
  // IWYU pragma: export
 // #include "idna_version.h"
-// Copyright 2025 Rimas Misevičius
+// Copyright 2025-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1404,18 +1514,23 @@ operator^=(E& lhs, E rhs) noexcept {
 // NOLINTBEGIN(*-macro-*)
 
 #define UPA_IDNA_VERSION_MAJOR 2
-#define UPA_IDNA_VERSION_MINOR 4
+#define UPA_IDNA_VERSION_MINOR 6
 #define UPA_IDNA_VERSION_PATCH 0
 
-#define UPA_IDNA_VERSION "2.4.0"
+#define UPA_IDNA_VERSION "2.6.0"
 
 // NOLINTEND(*-macro-*)
 
 #endif // UPA_IDNA_IDNA_VERSION_H
  // IWYU pragma: export
-#include <string>
+
+#ifndef UPA_MODULE
+# include <string>
+#endif // UPA_MODULE
 
 namespace upa::idna {
+
+UPA_EXPORT_BEGIN
 
 enum class Option {
     Default           = 0,
@@ -1427,21 +1542,16 @@ enum class Option {
     CheckJoiners      = 0x0020,
     // ASCII optimization
     InputASCII        = 0x1000,
+    // On error return imediatly, without further processing
+    FailFast          = 0x2000,
 };
 
 template<>
 struct enable_bitmask_operators<Option> : public std::true_type {};
 
-
-namespace detail {
-
-// Bit flags
-constexpr bool has(Option option, const Option value) noexcept {
-    return (option & value) == value;
-}
-
+// Returns the options for to_ascii and to_unicode functions
 constexpr Option domain_options(bool be_strict, bool is_input_ascii) noexcept {
-    // https://url.spec.whatwg.org/#concept-domain-to-ascii
+    // https://url.spec.whatwg.org/#domain-parser-toascii
     // https://url.spec.whatwg.org/#concept-domain-to-unicode
     // Note. The to_unicode ignores Option::VerifyDnsLength
     auto options = Option::CheckBidi | Option::CheckJoiners;
@@ -1452,14 +1562,23 @@ constexpr Option domain_options(bool be_strict, bool is_input_ascii) noexcept {
     return options;
 }
 
+UPA_EXPORT_END
+
+namespace detail {
+
+// Bit flags
+constexpr bool has(Option option, const Option value) noexcept {
+    return (option & value) == value;
+}
+
 // IDNA map and normalize to NFC
 
 template <typename CharT>
-bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Option options, bool is_to_ascii);
+bool map(std::u32string& mapped, const CharT* input, const CharT* input_end, Option options);
 
-extern template UPA_IDNA_API bool map(std::u32string&, const char*, const char*, Option, bool);
-extern template UPA_IDNA_API bool map(std::u32string&, const char16_t*, const char16_t*, Option, bool);
-extern template UPA_IDNA_API bool map(std::u32string&, const char32_t*, const char32_t*, Option, bool);
+extern template UPA_IDNA_API bool map(std::u32string&, const char*, const char*, Option);
+extern template UPA_IDNA_API bool map(std::u32string&, const char16_t*, const char16_t*, Option);
+extern template UPA_IDNA_API bool map(std::u32string&, const char32_t*, const char32_t*, Option);
 
 // Performs ToASCII on IDNA-mapped and normalized to NFC input
 UPA_IDNA_API bool to_ascii_mapped(std::string& domain, const std::u32string& mapped, Option options);
@@ -1469,12 +1588,14 @@ UPA_IDNA_API bool to_unicode_mapped(std::u32string& domain, const std::u32string
 
 } // namespace detail
 
+UPA_EXPORT_BEGIN
 
 /// @brief Implements the Unicode IDNA ToASCII
 ///
 /// See: https://www.unicode.org/reports/tr46/#ToASCII
 ///
-/// @param[out] domain buffer to store result string
+/// @param[out] domain buffer to store result string. Stored
+///   result is valid if the function returns `true`.
 /// @param[in]  input source domain string
 /// @param[in]  input_end the end of source domain string
 /// @param[in]  options
@@ -1484,16 +1605,19 @@ inline bool to_ascii(std::string& domain, const CharT* input, const CharT* input
     // P1 - Map and further processing
     std::u32string mapped;
     domain.clear();
+    const auto opt = options | Option::FailFast;
     return
-        detail::map(mapped, input, input_end, options, true) &&
-        detail::to_ascii_mapped(domain, mapped, options);
+        detail::map(mapped, input, input_end, opt) &&
+        detail::to_ascii_mapped(domain, mapped, opt);
 }
 
 /// @brief Implements the Unicode IDNA ToUnicode
 ///
 /// See: https://www.unicode.org/reports/tr46/#ToUnicode
 ///
-/// @param[out] domain buffer to store result string
+/// @param[out] domain buffer to store result string. Result is appended to the buffer. The
+///  stored result is valid regardless of the returned value, unless `Option::FailFast` is
+///  specified; in that case, the stored result is valid only if the returned value is `true`.
 /// @param[in]  input source domain string
 /// @param[in]  input_end the end of source domain string
 /// @param[in]  options
@@ -1502,13 +1626,15 @@ template <typename CharT>
 inline bool to_unicode(std::u32string& domain, const CharT* input, const CharT* input_end, Option options) {
     // P1 - Map and further processing
     std::u32string mapped;
-    detail::map(mapped, input, input_end, options, false);
+    if (!detail::map(mapped, input, input_end, options) &&
+        detail::has(options, Option::FailFast))
+        return false;
     return detail::to_unicode_mapped(domain, mapped, options);
 }
 
 /// @brief Implements the domain to ASCII algorithm
 ///
-/// See: https://url.spec.whatwg.org/#concept-domain-to-ascii
+/// This function is deprecated. Use `to_ascii` instead.
 ///
 /// @param[out] domain buffer to store result string
 /// @param[in]  input source domain string
@@ -1517,10 +1643,11 @@ inline bool to_unicode(std::u32string& domain, const CharT* input, const CharT* 
 /// @param[in]  is_input_ascii
 /// @return `true` on success, or `false` on failure
 template <typename CharT>
+[[deprecated]]
 inline bool domain_to_ascii(std::string& domain, const CharT* input, const CharT* input_end,
     bool be_strict = false, bool is_input_ascii = false)
 {
-    const bool res = to_ascii(domain, input, input_end, detail::domain_options(be_strict, is_input_ascii));
+    const bool res = to_ascii(domain, input, input_end, domain_options(be_strict, is_input_ascii));
 
     // 3. If result is the empty string, domain-to-ASCII validation error, return failure.
     //
@@ -1531,7 +1658,7 @@ inline bool domain_to_ascii(std::string& domain, const CharT* input, const CharT
 
 /// @brief Implements the domain to Unicode algorithm
 ///
-/// See: https://url.spec.whatwg.org/#concept-domain-to-unicode
+/// This function is deprecated. Use `to_unicode` instead.
 ///
 /// @param[out] domain buffer to store result string
 /// @param[in]  input source domain string
@@ -1540,10 +1667,11 @@ inline bool domain_to_ascii(std::string& domain, const CharT* input, const CharT
 /// @param[in]  is_input_ascii
 /// @return `true` on success, or `false` on errors
 template <typename CharT>
+[[deprecated]]
 inline bool domain_to_unicode(std::u32string& domain, const CharT* input, const CharT* input_end,
     bool be_strict = false, bool is_input_ascii = false)
 {
-    return to_unicode(domain, input, input_end, detail::domain_options(be_strict, is_input_ascii));
+    return to_unicode(domain, input, input_end, domain_options(be_strict, is_input_ascii));
 }
 
 /// @brief Encodes Unicode version
@@ -1571,13 +1699,14 @@ inline bool domain_to_unicode(std::u32string& domain, const CharT* input, const 
     return make_unicode_version(17);
 }
 
+UPA_EXPORT_END
 
 } // namespace upa::idna
 
 #endif // UPA_IDNA_IDNA_H
  // IWYU pragma: export
 // #include "idna/nfc.h"
-// Copyright 2024-2025 Rimas Misevičius
+// Copyright 2024-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1586,7 +1715,10 @@ inline bool domain_to_unicode(std::u32string& domain, const CharT* input, const 
 
 // #include "config.h"
  // IWYU pragma: export
-// #include <string>
+
+#ifndef UPA_MODULE
+// # include <string>
+#endif // UPA_MODULE
 
 namespace upa::idna {
 
@@ -1603,7 +1735,7 @@ UPA_IDNA_API void normalize_nfc(std::u32string& str);
 #endif // UPA_IDNA_NFC_H
 
 // #include "idna/punycode.h"
-// Copyright 2017-2025 Rimas Misevičius
+// Copyright 2017-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1612,7 +1744,10 @@ UPA_IDNA_API void normalize_nfc(std::u32string& str);
 
 // #include "config.h"
  // IWYU pragma: export
-// #include <string>
+
+#ifndef UPA_MODULE
+// # include <string>
+#endif
 
 namespace upa::idna::punycode {
 
@@ -1634,9 +1769,8 @@ UPA_IDNA_API status decode(std::u32string& output, const char32_t* first, const 
 #endif // UPA_IDNA_H
 
 // #include "str_arg.h"
-
 // #include "url_ip.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1644,10 +1778,9 @@ UPA_IDNA_API status decode(std::u32string& output, const char32_t* first, const 
 #ifndef UPA_URL_IP_H
 #define UPA_URL_IP_H
 
-// #include "config.h"
- // IWYU pragma: export
+// #include "config.h" // IWYU pragma: export
 // #include "url_percent_encode.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -1659,24 +1792,24 @@ UPA_IDNA_API status decode(std::u32string& output, const char32_t* first, const 
 #ifndef UPA_URL_PERCENT_ENCODE_H
 #define UPA_URL_PERCENT_ENCODE_H
 
-// #include "config.h"
- // IWYU pragma: export
+// #include "config.h" // IWYU pragma: export
 // #include "str_arg.h"
-
 // #include "url_utf.h"
-
 // #include "util.h"
 
-#include <array>
-#include <cstdint> // uint8_t
-#include <initializer_list>
-#include <string>
-#include <type_traits>
-#include <utility>
+#ifndef UPA_MODULE
+# include <array>
+# include <cstdint> // uint8_t
+# include <initializer_list>
+# include <string>
+# include <type_traits>
+# include <utility>
+#endif // UPA_MODULE
 
 
 namespace upa {
 
+UPA_EXPORT_BEGIN
 
 /// @brief Represents code point set
 ///
@@ -1703,33 +1836,33 @@ public:
 
     /// @brief exclude @a c code point from set
     /// @param[in] c code point to exclude
-    constexpr void exclude(uint8_t c) {
+    constexpr void exclude(std::uint8_t c) {
         arr_[c >> 3] &= ~(1u << (c & 0x07));
     }
 
     /// @brief include @a c code point to set
     /// @param[in] c code point to include
-    constexpr void include(uint8_t c) {
+    constexpr void include(std::uint8_t c) {
         arr_[c >> 3] |= (1u << (c & 0x07));
     }
 
     /// @brief exclude list of code points from set
     /// @param[in] clist list of code points to exclude
-    constexpr void exclude(std::initializer_list<uint8_t> clist) {
+    constexpr void exclude(std::initializer_list<std::uint8_t> clist) {
         for (auto c : clist)
             exclude(c);
     }
 
     /// @brief include code points from list
     /// @param[in] clist list of code points to include
-    constexpr void include(std::initializer_list<uint8_t> clist) {
+    constexpr void include(std::initializer_list<std::uint8_t> clist) {
         for (auto c : clist)
             include(c);
     }
 
     /// @brief include range of code points to set
     /// @param[in] from,to range of code points to include
-    constexpr void include(uint8_t from, uint8_t to) {
+    constexpr void include(std::uint8_t from, std::uint8_t to) {
         for (auto c = from; c <= to; ++c)
             include(c);
     }
@@ -1754,7 +1887,7 @@ private:
     }
 
     // Data
-    std::array<uint8_t, 32> arr_{};
+    std::array<std::uint8_t, 32> arr_{};
 };
 
 
@@ -1816,6 +1949,7 @@ inline constexpr code_point_set component_no_encode_set{ [](code_point_set& self
     self.exclude({ 0x24, 0x25, 0x26, 0x2B, 0x2C });
     } };
 
+UPA_EXPORT_END
 
 namespace detail {
 
@@ -1889,14 +2023,14 @@ private:
     /// @brief include @a c code point to @a cpsbits sets
     /// @param[in] cpsbits code points sets
     /// @param[in] c code point to include
-    constexpr void include(CP_SET cpsbits, uint8_t c) {
+    constexpr void include(CP_SET cpsbits, std::uint8_t c) {
         arr_[c] |= cpsbits;
     }
 
     /// @brief include code points from list
     /// @param[in] cpsbits code points sets
     /// @param[in] clist list of code points to include
-    constexpr void include(CP_SET cpsbits, std::initializer_list<uint8_t> clist) {
+    constexpr void include(CP_SET cpsbits, std::initializer_list<std::uint8_t> clist) {
         for (auto c : clist)
             include(cpsbits, c);
     }
@@ -1904,7 +2038,7 @@ private:
     /// @brief include range of code points to set
     /// @param[in] cpsbits code points sets
     /// @param[in] from,to range of code points to include
-    constexpr void include(CP_SET cpsbits, uint8_t from, uint8_t to) {
+    constexpr void include(CP_SET cpsbits, std::uint8_t from, std::uint8_t to) {
         for (auto c = from; c <= to; ++c)
             include(cpsbits, c);
     }
@@ -1912,14 +2046,14 @@ private:
     /// @brief exclude @a c code point from set
     /// @param[in] cpsbits code points sets
     /// @param[in] c code point to exclude
-    constexpr void exclude(CP_SET cpsbits, uint8_t c) {
+    constexpr void exclude(CP_SET cpsbits, std::uint8_t c) {
         arr_[c] &= ~cpsbits;
     }
 
     /// @brief exclude list of code points from set
     /// @param[in] cpsbits code points sets
     /// @param[in] clist list of code points to exclude
-    constexpr void exclude(CP_SET cpsbits, std::initializer_list<uint8_t> clist) {
+    constexpr void exclude(CP_SET cpsbits, std::initializer_list<std::uint8_t> clist) {
         for (auto c : clist)
             exclude(cpsbits, c);
     }
@@ -1935,7 +2069,7 @@ private:
     }
 
     // Data
-    std::array<uint8_t, 256> arr_{};
+    std::array<std::uint8_t, 256> arr_{};
 };
 
 inline constexpr code_points_multiset code_points;
@@ -2020,7 +2154,7 @@ inline constexpr char kCharToHexLookup[8] = {
 };
 
 // Assumes the input is a valid hex digit! Call is_hex_char before using this.
-inline unsigned char hex_char_to_num(unsigned char c) noexcept {
+constexpr unsigned char hex_char_to_num(unsigned char c) noexcept {
     return c - kCharToHexLookup[c / 0x20];
 }
 
@@ -2036,7 +2170,7 @@ inline unsigned char hex_char_to_num(unsigned char c) noexcept {
 // sequence. On failure, |*first| will be unchanged.
 
 template <typename CharT>
-inline bool decode_hex_to_byte(const CharT*& first, const CharT* last, unsigned char& unescaped_value) {
+constexpr bool decode_hex_to_byte(const CharT*& first, const CharT* last, unsigned char& unescaped_value) {
     if (last - first < 2 ||
         !is_hex_char(first[0]) || !is_hex_char(first[1])) {
         // not enough or invalid hex digits
@@ -2057,7 +2191,7 @@ inline bool decode_hex_to_byte(const CharT*& first, const CharT* last, unsigned 
 // Percent-encodes byte and appends to string
 // See: https://url.spec.whatwg.org/#percent-encode
 
-inline void append_percent_encoded_byte(unsigned char uc, std::string& output) {
+UPA_CONSTEXPR_20 void append_percent_encoded_byte(unsigned char uc, std::string& output) {
     output.push_back('%');
     output.push_back(kHexCharLookup[uc >> 4]);
     output.push_back(kHexCharLookup[uc & 0xf]);
@@ -2068,7 +2202,7 @@ inline void append_percent_encoded_byte(unsigned char uc, std::string& output) {
 // sequences in input with Unicode replacement characters (U+FFFD) if present.
 
 template <typename CharT>
-inline bool append_utf8_percent_encoded_char(const CharT*& first, const CharT* last, std::string& output) {
+UPA_CONSTEXPR_20 bool append_utf8_percent_encoded_char(const CharT*& first, const CharT* last, std::string& output) {
     // url_util::read_utf_char(..) will handle invalid characters for us and give
     // us the kUnicodeReplacementCharacter, so we don't have to do special
     // checking after failure, just pass through the failure to the caller.
@@ -2083,7 +2217,7 @@ inline bool append_utf8_percent_encoded_char(const CharT*& first, const CharT* l
 // sequences in input with Unicode replacement characters (U+FFFD) if present.
 
 template<typename CharT>
-inline void append_utf8_percent_encoded(const CharT* first, const CharT* last, const code_point_set& cpset, std::string& output) {
+UPA_CONSTEXPR_20 void append_utf8_percent_encoded(const CharT* first, const CharT* last, const code_point_set& cpset, std::string& output) {
     using UCharT = std::make_unsigned_t<CharT>;
 
     for (auto it = first; it < last; ) {
@@ -2159,6 +2293,7 @@ inline void append_percent_decoded(StrT&& str, std::string& output) {
 
 } // namespace detail
 
+UPA_EXPORT_BEGIN
 
 /// @brief Percent decode input string.
 ///
@@ -2188,7 +2323,7 @@ template <class StrT, enable_if_str_arg_t<StrT> = 0>
 ///            must not be percent encoded
 /// @return percent encoded string
 template <class StrT, enable_if_str_arg_t<StrT> = 0>
-[[nodiscard]] inline std::string percent_encode(StrT&& str, const code_point_set& no_encode_set) {
+[[nodiscard]] UPA_CONSTEXPR_20 std::string percent_encode(StrT&& str, const code_point_set& no_encode_set) {
     const auto inp = make_str_arg(std::forward<StrT>(str));
 
     std::string out;
@@ -2207,10 +2342,11 @@ template <class StrT, enable_if_str_arg_t<StrT> = 0>
 /// @param[in] str string input
 /// @return percent encoded string
 template <class StrT, enable_if_str_arg_t<StrT> = 0>
-[[nodiscard]] inline std::string encode_url_component(StrT&& str) {
+[[nodiscard]] UPA_CONSTEXPR_20 std::string encode_url_component(StrT&& str) {
     return percent_encode(std::forward<StrT>(str), component_no_encode_set);
 }
 
+UPA_EXPORT_END
 
 } // namespace upa
 
@@ -2218,12 +2354,14 @@ template <class StrT, enable_if_str_arg_t<StrT> = 0>
 
 // #include "url_result.h"
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint> // uint16_t, uint32_t, uint64_t
-#include <limits>
-#include <string>
-#include <type_traits>
+#ifndef UPA_MODULE
+# include <algorithm>
+# include <cstddef>
+# include <cstdint> // uint16_t, uint32_t, uint64_t
+# include <limits>
+# include <string>
+# include <type_traits>
+#endif // UPA_MODULE
 
 namespace upa {
 
@@ -2232,7 +2370,7 @@ namespace upa {
 // Optimized version
 //
 template <typename CharT>
-inline bool hostname_ends_in_a_number(const CharT* first, const CharT* last) {
+UPA_CONSTEXPR_20 bool hostname_ends_in_a_number(const CharT* first, const CharT* last) {
     if (first != last) {
         // if the last label is empty string, then skip it
         if (*(last - 1) == '.')
@@ -2265,13 +2403,13 @@ inline bool hostname_ends_in_a_number(const CharT* first, const CharT* last) {
 // TODO-WARN: validationError
 //
 template <typename CharT>
-inline validation_errc ipv4_parse_number(const CharT* first, const CharT* last, uint32_t& number) {
+constexpr validation_errc ipv4_parse_number(const CharT* first, const CharT* last, std::uint32_t& number) {
     // If input is the empty string, then return failure
     if (first == last)
         return validation_errc::ipv4_non_numeric_part;
 
     // Figure out the base
-    uint32_t radix = 10;
+    std::uint32_t radix = 10;
     if (first[0] == '0') {
         const std::size_t len = last - first;
         if (len == 1) {
@@ -2307,7 +2445,7 @@ inline validation_errc ipv4_parse_number(const CharT* first, const CharT* last, 
     // Check chars are valid digits and convert its sequence to number.
     // Use the 64-bit to get a big number (no hex, decimal, or octal
     // number can overflow a 64-bit number in <= 16 characters).
-    uint64_t num = 0;
+    std::uint64_t num = 0;
     if (radix <= 10) {
         const auto chmax = static_cast<CharT>('0' - 1 + radix);
         for (auto it = first; it != last; ++it) {
@@ -2328,10 +2466,10 @@ inline validation_errc ipv4_parse_number(const CharT* first, const CharT* last, 
     }
 
     // Check for 32-bit overflow.
-    if (num > std::numeric_limits<uint32_t>::max())
+    if (num > std::numeric_limits<std::uint32_t>::max())
         return validation_errc::ipv4_out_of_range_part; // int overflow
 
-    number = static_cast<uint32_t>(num);
+    number = static_cast<std::uint32_t>(num);
     return validation_errc::ok;
 }
 
@@ -2342,7 +2480,7 @@ inline validation_errc ipv4_parse_number(const CharT* first, const CharT* last, 
 // - on failure returns validation error code
 //
 template <typename CharT>
-inline validation_errc ipv4_parse(const CharT* first, const CharT* last, uint32_t& ipv4) {
+constexpr validation_errc ipv4_parse(const CharT* first, const CharT* last, std::uint32_t& ipv4) {
     using UCharT = std::make_unsigned_t<CharT>;
 
     // 2. If the last item in parts is the empty string, then
@@ -2354,19 +2492,18 @@ inline validation_errc ipv4_parse(const CharT* first, const CharT* last, uint32_
         return validation_errc::ipv4_non_numeric_part;
 
     // <1>.<2>.<3>.<4>.<->
-    const CharT* part[6];
+    const CharT* part[6] = { first };
     int dot_count = 0;
 
     // split on "."
-    part[0] = first;
     for (auto it = first; it != last; ++it) {
         const auto uc = static_cast<UCharT>(*it);
         if (uc == '.') {
             if (dot_count == 4)
-                // 3. If parts’s size is greater than 4, IPv4-too-many-parts validation error, return failure
+                // 4. If parts’s size is greater than 4, IPv4-too-many-parts validation error, return failure
                 return validation_errc::ipv4_too_many_parts;
             if (part[dot_count] == it)
-                // 5.2 & "IPv4 number parser":
+                // 6.2 & "IPv4 number parser":
                 // 1. If input is the empty string, then return failure.
                 return validation_errc::ipv4_non_numeric_part;
             part[++dot_count] = it + 1; // skip '.'
@@ -2386,32 +2523,33 @@ inline validation_errc ipv4_parse(const CharT* first, const CharT* last, uint32_
         // the part[part_count] - 1 must point to the end of last part:
         part[part_count] = last + 1;
     }
-    // 3. If parts’s size is greater than 4, IPv4-too-many-parts validation error, return failure
+    // 3. If parts’s size is less than 4, IPv4-too-few-parts validation error. (TODO-WARN)
+    // 4. If parts’s size is greater than 4, IPv4-too-many-parts validation error, return failure
     if (part_count > 4)
         return validation_errc::ipv4_too_many_parts;
 
     // IPv4 numbers
-    uint32_t number[4];
+    std::uint32_t number[4] = {};
     for (int ind = 0; ind < part_count; ++ind) {
         const auto res = ipv4_parse_number(part[ind], part[ind + 1] - 1, number[ind]);
-        // 5.2. If result is failure, IPv4-non-numeric-part validation error, return failure.
+        // 6.2. If result is failure, IPv4-non-numeric-part validation error, return failure.
         if (res != validation_errc::ok) return res;
-        // TODO-WARN: 5.3. If result[1] is true, IPv4-non-decimal-part validation error.
+        // TODO-WARN: 6.3. If result[1] is true, IPv4-non-decimal-part validation error.
     }
     // TODO-WARN:
-    // 6. If any item in numbers is greater than 255, IPv4-out-of-range-part validation error.
+    // 7. If any item in numbers is greater than 255, IPv4-out-of-range-part validation error.
 
-    // 7. If any but the last item in numbers is greater than 255, then return failure.
+    // 8. If any but the last item in numbers is greater than 255, then return failure.
     for (int ind = 0; ind < part_count - 1; ++ind) {
         if (number[ind] > 255) return validation_errc::ipv4_out_of_range_part;
     }
-    // 8. If the last item in numbers is greater than or equal to 256(5 − numbers’s size),
+    // 9. If the last item in numbers is greater than or equal to 256^(5 − numbers’s size),
     // then return failure.
     ipv4 = number[part_count - 1];
-    if (ipv4 > (std::numeric_limits<uint32_t>::max() >> (8 * (part_count - 1))))
+    if (ipv4 > (std::numeric_limits<std::uint32_t>::max() >> (8 * (part_count - 1))))
         return validation_errc::ipv4_out_of_range_part;
 
-    // 14.1. Increment ipv4 by n * 256**(3 - counter).
+    // 13.1. Increment ipv4 by n * 256^(3 - counter).
     for (int counter = 0; counter < part_count - 1; ++counter) {
         ipv4 += number[counter] << (8 * (3 - counter));
     }
@@ -2422,7 +2560,7 @@ inline validation_errc ipv4_parse(const CharT* first, const CharT* last, uint32_
 // IPv4 serializer
 // https://url.spec.whatwg.org/#concept-ipv4-serializer
 
-UPA_API void ipv4_serialize(uint32_t ipv4, std::string& output);
+UPA_API void ipv4_serialize(std::uint32_t ipv4, std::string& output);
 
 
 // IPv6
@@ -2430,7 +2568,7 @@ UPA_API void ipv4_serialize(uint32_t ipv4, std::string& output);
 namespace detail {
 
 template <typename IntT, typename CharT>
-inline IntT get_hex_number(const CharT*& pointer, const CharT* last) {
+constexpr IntT get_hex_number(const CharT*& pointer, const CharT* last) {
     IntT value = 0;
     while (pointer != last && detail::is_hex_char(*pointer)) {
         const auto uc = static_cast<unsigned char>(*pointer);
@@ -2449,8 +2587,8 @@ inline IntT get_hex_number(const CharT*& pointer, const CharT* last) {
 // - on failure returns false
 //
 template <typename CharT>
-inline validation_errc ipv6_parse(const CharT* first, const CharT* last, uint16_t(&address)[8]) {
-    std::fill(std::begin(address), std::end(address), static_cast<uint16_t>(0));
+UPA_CONSTEXPR_20 validation_errc ipv6_parse(const CharT* first, const CharT* last, std::uint16_t(&address)[8]) {
+    std::fill(std::begin(address), std::end(address), static_cast<std::uint16_t>(0));
     int piece_index = 0;    // zero
     int compress = 0;       // null
     bool is_ipv4 = false;
@@ -2503,7 +2641,7 @@ inline validation_errc ipv6_parse(const CharT* first, const CharT* last, uint16_
 
         // HEX
         auto pointer0 = pointer;
-        const auto value = detail::get_hex_number<uint16_t>(pointer, (last - pointer <= 4 ? last : pointer + 4));
+        const auto value = detail::get_hex_number<std::uint16_t>(pointer, (last - pointer <= 4 ? last : pointer + 4));
         if (pointer != last) {
             const CharT ch = *pointer;
             if (ch == '.') {
@@ -2527,6 +2665,9 @@ inline validation_errc ipv6_parse(const CharT* first, const CharT* last, uint16_
                 // validation error, return failure.
                 return validation_errc::ipv6_invalid_code_point;
             }
+            // TODO-WARN:
+            // 6.8. If length is greater than 1 and value is less than 0x10^(length − 1),
+            // IPv6-piece-leading-zero validation error.
         }
         address[piece_index++] = value;
     }
@@ -2567,7 +2708,7 @@ inline validation_errc ipv6_parse(const CharT* first, const CharT* last, uint16_
                     return validation_errc::ipv4_in_ipv6_out_of_range_part;
                 ++pointer;
             }
-            address[piece_index] = static_cast<uint16_t>(address[piece_index] * 0x100 + ipv4Piece);
+            address[piece_index] = static_cast<std::uint16_t>(address[piece_index] * 0x100 + ipv4Piece);
             ++numbers_seen;
             if (!(numbers_seen & 1)) // 2 or 4
                 ++piece_index;
@@ -2597,7 +2738,7 @@ inline validation_errc ipv6_parse(const CharT* first, const CharT* last, uint16_
 // IPv6 serializer
 // https://url.spec.whatwg.org/#concept-ipv6-serializer
 
-UPA_API void ipv6_serialize(const uint16_t(&address)[8], std::string& output);
+UPA_API void ipv6_serialize(const std::uint16_t(&address)[8], std::string& output);
 
 
 } // namespace upa
@@ -2605,25 +2746,25 @@ UPA_API void ipv6_serialize(const uint16_t(&address)[8], std::string& output);
 #endif // UPA_URL_IP_H
 
 // #include "url_percent_encode.h"
-
 // #include "url_result.h"
-
 // #include "url_utf.h"
-
 // #include "util.h"
 
-#include <algorithm> // any_of
-#include <cassert>
-#include <cstdint> // uint16_t, uint32_t
-#include <string>
-#include <type_traits>
+#ifndef UPA_MODULE
+# include <algorithm> // any_of
+# include <cassert>
+# include <cstdint> // uint16_t, uint32_t
+# include <string>
+# include <string_view>
+# include <type_traits>
+#endif // UPA_MODULE
 
 namespace upa {
 
 /// @brief Host representation
 ///
 /// See: https://url.spec.whatwg.org/#host-representation
-enum class HostType {
+UPA_EXPORT enum class HostType {
     Empty = 0, ///< **empty host** is the empty string
     Opaque,    ///< **opaque host** is a non-empty ASCII string used in a not special URL
     Domain,    ///< **domain** is a non-empty ASCII string that identifies a realm within a network
@@ -2633,10 +2774,10 @@ enum class HostType {
 };
 
 
-class host_output {
+class UPA_SO_VISIBLE host_output {
 protected:
     host_output() = default;
-    host_output(bool need_save)
+    inline host_output(bool need_save)
         : need_save_{ need_save } {}
 public:
     host_output(const host_output&) = delete;
@@ -2645,7 +2786,7 @@ public:
 
     virtual std::string& hostStart() = 0;
     virtual void hostDone(HostType /*ht*/) = 0;
-    bool need_save() const noexcept { return need_save_; }
+    inline bool need_save() const noexcept { return need_save_; }
 private:
     bool need_save_ = true;
 };
@@ -2670,7 +2811,7 @@ public:
 // https://github.com/whatwg/url/pull/288
 // https://whatpr.org/url/288.html#urlhost-class
 
-class url_host {
+UPA_EXPORT class url_host {
 public:
     url_host() = delete;
     url_host(const url_host&) = default;
@@ -2684,10 +2825,10 @@ public:
     ///
     /// @param[in] str Host string to parse
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    explicit url_host(StrT&& str) {
+    inline explicit url_host(const StrT& str) {
         host_out out(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
         const auto res = host_parser::parse_host(inp.begin(), inp.end(), false, out);
         if (res != validation_errc::ok)
             throw url_error(res, "Host parse error");
@@ -2699,34 +2840,34 @@ public:
     /// Host type getter
     ///
     /// @return host type, the one of: Domain, IPv4, IPv6
-    [[nodiscard]] HostType type() const {
+    [[nodiscard]] inline HostType type() const {
         return type_;
     }
 
     /// Hostname view
     ///
-    /// @return serialized host as string_view
-    [[nodiscard]] string_view name() const UPA_LIFETIMEBOUND {
+    /// @return serialized host as std::string_view
+    [[nodiscard]] inline std::string_view name() const UPA_LIFETIMEBOUND {
         return host_str_;
     }
 
     /// Hostname stringifier
     ///
     /// @return host serialized to string
-    [[nodiscard]] std::string to_string() const {
+    [[nodiscard]] inline std::string to_string() const {
         return host_str_;
     }
 
 private:
-    class host_out : public host_output {
+    class UPA_SO_VISIBLE host_out : public host_output {
     public:
-        explicit host_out(url_host& host)
+        inline explicit host_out(url_host& host)
             : host_(host)
         {}
-        std::string& hostStart() override {
+        inline std::string& hostStart() override {
             return host_.host_str_;
         }
-        void hostDone(HostType ht) override {
+        inline void hostDone(HostType ht) override {
             host_.type_ = ht;
         }
     private:
@@ -2744,13 +2885,22 @@ private:
 namespace detail {
 
 template <typename CharT>
-inline bool contains_forbidden_domain_char(const CharT* first, const CharT* last) {
+UPA_CONSTEXPR_20 bool contains_forbidden_domain_char(const CharT* first, const CharT* last) {
     return std::any_of(first, last, detail::is_forbidden_domain_char<CharT>);
 }
 
 template <typename CharT>
-inline bool contains_forbidden_host_char(const CharT* first, const CharT* last) {
+UPA_CONSTEXPR_20 bool contains_forbidden_host_char(const CharT* first, const CharT* last) {
     return std::any_of(first, last, detail::is_forbidden_host_char<CharT>);
+}
+
+// https://url.spec.whatwg.org/#domain-parser-toascii
+template <typename CharT>
+inline bool domain_parser_to_ascii(std::string& domain, const CharT* input, const CharT* input_end,
+    bool be_strict, bool is_input_ascii = false)
+{
+    return idna::to_ascii(domain, input, input_end,
+        idna::domain_options(be_strict, is_input_ascii));
 }
 
 } // namespace detail
@@ -2759,43 +2909,119 @@ inline bool contains_forbidden_host_char(const CharT* first, const CharT* last) 
 // IDNA
 // https://url.spec.whatwg.org/#idna
 
-/// @brief Implements the domain to Unicode algorithm
+/// @brief Implements the domain parser algorithm
 ///
-/// See: https://url.spec.whatwg.org/#concept-domain-to-unicode
-/// The domain to Unicode result is appended to the @a output, even if the
-/// function returns `false`.
+/// See: https://url.spec.whatwg.org/#concept-domain-to-ascii
+/// The @a output is valid only if the function returns `upa::validation_errc::ok`.
 ///
 /// @param[out] output string to store result
 /// @param[in]  input source domain string
-/// @param[in]  be_strict
-/// @param[in]  is_input_ascii
+/// @param[in]  be_strict whether to enforce strict parsing rules
+/// @return upa::validation_errc::ok on success, or upa::validation_errc::domain_to_ascii
+///   on failure
+template <class StrT, enable_if_str_arg_t<StrT> = 0>
+inline validation_errc domain_parser(std::string& output, const StrT& input, bool be_strict)
+{
+    const auto inp = make_str_arg(input);
+
+    const bool is_ascii = util::is_ascii(inp.begin(), inp.end());
+    if (be_strict) {
+        return detail::domain_parser_to_ascii(output, inp.begin(), inp.end(), true, is_ascii)
+            ? validation_errc::ok : validation_errc::domain_to_ascii;
+    }
+    if (is_ascii) {
+        if (inp.empty() || detail::contains_forbidden_domain_char(inp.begin(), inp.end()))
+            return validation_errc::domain_to_ascii;
+        output.clear();
+        util::append_ascii_lowercase(output, inp.begin(), inp.end());
+        return validation_errc::ok;
+    }
+
+    // be_strict == false & non-ASCII input
+    if (detail::domain_parser_to_ascii(output, inp.begin(), inp.end(), false, false) &&
+        !output.empty() &&
+        !detail::contains_forbidden_domain_char(output.data(), output.data() + output.size()))
+        return validation_errc::ok;
+    return validation_errc::domain_to_ascii;
+}
+
+/// @brief Implements the domain to Unicode algorithm
+///
+/// It runs the Unicode ToUnicode algorithm on the @a input string. The result is appended to
+/// the @a output, and the function returns `true` if ToUnicode records no errors. Otherwise,
+/// the @a input is appended to the @a output, and the function returns `false`.
+/// 
+/// See: https://url.spec.whatwg.org/#concept-domain-to-unicode
+///
+/// @param[out] output string to store result
+/// @param[in]  input source domain string
+/// @param[in]  be_strict whether to enforce strict parsing rules
+/// @param[in]  is_input_ascii whether the input is ASCII
 /// @return `true` on success, or `false` on errors
-template <class CharT, class StrT, enable_if_str_arg_t<StrT> = 0>
-inline bool domain_to_unicode(std::basic_string<CharT>& output, StrT&& input,
+UPA_EXPORT template <class CharT, class StrT, enable_if_str_arg_t<StrT> = 0>
+inline bool domain_to_unicode(std::basic_string<CharT>& output, const StrT& input,
     bool be_strict = false, bool is_input_ascii = false)
 {
-    const auto inp = make_str_arg(std::forward<StrT>(input));
+    static constexpr auto to_unicode =
+        [](std::u32string& domain, const auto* input, const auto* input_end,
+            bool be_strict, bool is_input_ascii) {
+            return idna::to_unicode(domain, input, input_end, idna::domain_options(
+                be_strict, is_input_ascii) | idna::Option::FailFast);
+        };
+
+    const auto inp = make_str_arg(input);
+
     if constexpr (std::is_same_v<CharT, char32_t>) {
-        return idna::domain_to_unicode(output, inp.begin(), inp.end(), be_strict, is_input_ascii);
+        const auto len = output.length();
+        if (to_unicode(output, inp.begin(), inp.end(), be_strict, is_input_ascii))
+            return true;
+        output.resize(len);
     } else {
         std::u32string domain;
-        const bool res = idna::domain_to_unicode(domain, inp.begin(), inp.end(), be_strict, is_input_ascii);
-        if constexpr (sizeof(CharT) == sizeof(char)) {
-            // CharT is char8_t, or char
-            for (auto cp : domain)
-                url_utf::append_utf8<std::basic_string<CharT>, detail::append_to_string>(cp, output);
-        } else if constexpr (sizeof(CharT) == sizeof(char16_t)) {
-            // CharT is char16_t, or wchar_t (Windows)
-            for (auto cp : domain)
-                url_utf::append_utf16(cp, output);
-        } else if constexpr (sizeof(CharT) == sizeof(char32_t)) {
-            // CharT is wchar_t (non Windows)
-            util::append(output, domain);
-        } else {
-            static_assert(util::false_v<CharT>, "unsupported output character type");
+        if (to_unicode(domain, inp.begin(), inp.end(), be_strict, is_input_ascii)) {
+            if constexpr (sizeof(CharT) == sizeof(char)) {
+                // CharT is char8_t, or char
+                for (auto cp : domain)
+                    url_utf::append_utf8<std::basic_string<CharT>, detail::append_to_string>(cp, output);
+            } else if constexpr (sizeof(CharT) == sizeof(char16_t)) {
+                // CharT is char16_t, or wchar_t (Windows)
+                for (auto cp : domain)
+                    url_utf::append_utf16(cp, output);
+            } else if constexpr (sizeof(CharT) == sizeof(char32_t)) {
+                // CharT is wchar_t (non Windows)
+                util::append(output, domain);
+            } else {
+                static_assert(util::false_v<CharT>, "unsupported output character type");
+            }
+            return true;
         }
-        return res;
     }
+
+    // If an error was recorded, then return input
+    using InpCharT = typename decltype(inp)::value_type;
+    if constexpr (sizeof(CharT) == sizeof(InpCharT)) {
+        // The character encodings are the same. Append the input to the output.
+        util::append(output, inp);
+    } else {
+        // The character encodings differ, so convert and append the input to the output.
+        const auto* last = inp.end();
+        for (const auto* ptr = inp.begin(); ptr != last;) {
+            const auto cp = url_utf::read_utf_char(ptr, last).value;
+            if constexpr (sizeof(CharT) == sizeof(char)) {
+                // CharT is char8_t, or char
+                url_utf::append_utf8<std::basic_string<CharT>, detail::append_to_string>(cp, output);
+            } else if constexpr (sizeof(CharT) == sizeof(char16_t)) {
+                // CharT is char16_t, or wchar_t (Windows)
+                url_utf::append_utf16(cp, output);
+            } else if constexpr (sizeof(CharT) == sizeof(char32_t)) {
+                // CharT is char32_t, or wchar_t (non Windows)
+                output.push_back(static_cast<CharT>(cp));
+            } else {
+                static_assert(util::false_v<CharT>, "unsupported output character type");
+            }
+        }
+    }
+    return false;
 }
 
 // The host parser
@@ -2804,6 +3030,12 @@ inline bool domain_to_unicode(std::basic_string<CharT>& output, StrT&& input,
 template <typename CharT>
 inline validation_errc host_parser::parse_host(const CharT* first, const CharT* last, bool is_opaque, host_output& dest) {
     using UCharT = std::make_unsigned_t<CharT>;
+
+    static constexpr auto to_ascii_non_empty =
+        [](std::string& domain, const auto* input, const auto* input_end) {
+            return idna::to_ascii(domain, input, input_end, idna::domain_options(false, false)) &&
+                !domain.empty();
+        };
 
     // 1. Non-"file" special URL's cannot have an empty host.
     // 2. For "file" URL's empty host is set in the file_host_state 1.2
@@ -2834,40 +3066,39 @@ inline validation_errc host_parser::parse_host(const CharT* first, const CharT* 
     // Is ASCII domain?
     const auto ptr = std::find_if_not(first, last, detail::is_ascii_domain_char<CharT>);
     if (ptr == last) {
-        if (!util::has_xn_label(first, last)) {
-            // Fast path for ASCII domain
+        // Fast path for ASCII domain
 
-            // If asciiDomain ends in a number, return the result of IPv4 parsing asciiDomain
-            if (hostname_ends_in_a_number(first, last))
-                return parse_ipv4(first, last, dest);
+        // If asciiDomain ends in a number, return the result of IPv4 parsing asciiDomain
+        if (hostname_ends_in_a_number(first, last))
+            return parse_ipv4(first, last, dest);
 
-            if (dest.need_save()) {
-                // Return asciiDomain lower cased
-                std::string& str_host = dest.hostStart();
-                util::append_ascii_lowercase(str_host, first, last);
-                dest.hostDone(HostType::Domain);
-            }
-            return validation_errc::ok;
+        if (dest.need_save()) {
+            // Return asciiDomain lower cased
+            std::string& str_host = dest.hostStart();
+            util::append_ascii_lowercase(str_host, first, last);
+            dest.hostDone(HostType::Domain);
         }
-    } else if (static_cast<UCharT>(*ptr) < 0x80 && *ptr != '%') {
+        return validation_errc::ok;
+    }
+    if (static_cast<UCharT>(*ptr) < 0x80 && *ptr != '%') {
         // NFC normalizes U+003C (<), U+003D (=), U+003E (>) characters if they precede
         // U+0338. Therefore, no errors are reported here for forbidden < and > characters
         // if there is a possibility to normalize them.
         if (!(*ptr >= 0x3C && *ptr <= 0x3E && ptr + 1 < last && static_cast<UCharT>(ptr[1]) >= 0x80))
-            // 7. If asciiDomain contains a forbidden domain code point, domain-invalid-code-point
-            // validation error, return failure.
-            return validation_errc::domain_invalid_code_point;
+            // domain parser: 8. If result contains a forbidden domain code point, then
+            // return failure
+            return validation_errc::domain_to_ascii;
     }
 
     std::string buff_ascii;
 
     const auto pes = std::find(ptr, last, '%');
     if (pes == last) {
-        // Input is ASCII if ptr == last
-        if (!idna::domain_to_ascii(buff_ascii, first, last, false, ptr == last))
+        // Input (first, last) contains non-ASCII characters
+        if (!to_ascii_non_empty(buff_ascii, first, last))
             return validation_errc::domain_to_ascii;
     } else {
-        // Input for domain_to_ascii
+        // Buffer for domain_to_ascii's input
         simple_buffer<char32_t> buff_uc;
 
         // copy ASCII chars
@@ -2876,8 +3107,9 @@ inline validation_errc host_parser::parse_host(const CharT* first, const CharT* 
             buff_uc.push_back(static_cast<char32_t>(uch));
         }
 
-        // Let buff_uc be the result of running UTF-8 decode (to UTF-16) without BOM
+        // Let buff_uc be the result of running UTF-8 decode (to UTF-32) without BOM
         // on the percent decoding of UTF-8 encode on input
+        bool is_ascii = true;
         for (auto it = ptr; it != last;) {
             const auto uch = static_cast<UCharT>(*it++);
             if (uch < 0x80) {
@@ -2888,12 +3120,17 @@ inline validation_errc host_parser::parse_host(const CharT* first, const CharT* 
                 // uch == '%'
                 unsigned char uc8; // NOLINT(cppcoreguidelines-init-variables)
                 if (detail::decode_hex_to_byte(it, last, uc8)) {
+                    // TODO-WARN:
+                    // If input contains a percent-encoded byte, domain-percent-encoded
+                    // validation error 
                     if (uc8 < 0x80) {
                         buff_uc.push_back(static_cast<char32_t>(uc8));
                         continue;
                     }
+                    is_ascii = false;
                     // percent encoded utf-8 sequence
-                    // TODO: gal po vieną code_point, tuomet užtektų utf-8 buferio vienam simboliui
+                    // TODO: Perhaps process one code point at a time. Then, a buffer
+                    // for a single character encoded in UTF-8 would suffice.
                     simple_buffer<char> buff_utf8;
                     buff_utf8.push_back(static_cast<char>(uc8));
                     while (it != last && *it == '%') {
@@ -2909,24 +3146,29 @@ inline validation_errc host_parser::parse_host(const CharT* first, const CharT* 
                     //buff_utf8.clear();
                     continue;
                 }
-                // detected an invalid percent-encoding sequence
+                // Detected an invalid percent-encoding sequence
+                // see 2. step in https://url.spec.whatwg.org/#percent-decode
                 buff_uc.push_back('%');
             } else { // uch >= 0x80
+                is_ascii = false;
                 --it;
                 buff_uc.push_back(url_utf::read_utf_char(it, last).value);
             }
         }
-        if (!idna::domain_to_ascii(buff_ascii, buff_uc.begin(), buff_uc.end()))
+        if (is_ascii)
+            util::append_ascii_lowercase(buff_ascii, buff_uc.begin(), buff_uc.end());
+        else if (!to_ascii_non_empty(buff_ascii, buff_uc.begin(), buff_uc.end()))
             return validation_errc::domain_to_ascii;
     }
 
     if (detail::contains_forbidden_domain_char(buff_ascii.data(), buff_ascii.data() + buff_ascii.size())) {
-        // 7. If asciiDomain contains a forbidden domain code point, domain-invalid-code-point
-        // validation error, return failure.
-        return validation_errc::domain_invalid_code_point;
+        // domain parser: 8. If result contains a forbidden domain code point, then return failure
+        return validation_errc::domain_to_ascii;
     }
 
-    // If asciiDomain ends in a number, return the result of IPv4 parsing asciiDomain
+    // If asciiDomain ends in a number:
+    // TODO-WARN: 1. If domain is not an ASCII string, IPv4-non-ASCII-input validation error.  
+    // 2. Return the result of IPv4 parsing asciiDomain.
     if (hostname_ends_in_a_number(buff_ascii.data(), buff_ascii.data() + buff_ascii.size()))
         return parse_ipv4(buff_ascii.data(), buff_ascii.data() + buff_ascii.size(), dest);
 
@@ -2987,7 +3229,7 @@ inline validation_errc host_parser::parse_opaque_host(const CharT* first, const 
 
 template <typename CharT>
 inline validation_errc host_parser::parse_ipv4(const CharT* first, const CharT* last, host_output& dest) {
-    uint32_t ipv4;  // NOLINT(cppcoreguidelines-init-variables)
+    std::uint32_t ipv4;  // NOLINT(cppcoreguidelines-init-variables)
 
     const auto res = ipv4_parse(first, last, ipv4);
     if (res == validation_errc::ok && dest.need_save()) {
@@ -3000,7 +3242,7 @@ inline validation_errc host_parser::parse_ipv4(const CharT* first, const CharT* 
 
 template <typename CharT>
 inline validation_errc host_parser::parse_ipv6(const CharT* first, const CharT* last, host_output& dest) {
-    uint16_t ipv6addr[8];
+    std::uint16_t ipv6addr[8];
 
     const auto res = ipv6_parse(first, last, ipv6addr);
     if (res == validation_errc::ok && dest.need_save()) {
@@ -3018,12 +3260,10 @@ inline validation_errc host_parser::parse_ipv6(const CharT* first, const CharT* 
 
 #endif // UPA_URL_HOST_H
            // IWYU pragma: export
-// #include "url_percent_encode.h"
- // IWYU pragma: export
-// #include "url_result.h"
-         // IWYU pragma: export
+// #include "url_percent_encode.h" // IWYU pragma: export
+// #include "url_result.h"         // IWYU pragma: export
 // #include "url_search_params.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -3031,21 +3271,21 @@ inline validation_errc host_parser::parse_ipv6(const CharT* first, const CharT* 
 #ifndef UPA_URL_SEARCH_PARAMS_H
 #define UPA_URL_SEARCH_PARAMS_H
 
-// #include "config.h"
- // IWYU pragma: export
+// #include "config.h" // IWYU pragma: export
 // #include "str_arg.h"
-
 // #include "url_percent_encode.h"
-
 // #include "url_utf.h"
 
-#include <cassert>
-#include <list>
-#include <memory>
-#include <ostream>
-#include <string>
-#include <type_traits>
-#include <utility>
+#ifndef UPA_MODULE
+# include <cassert>
+# include <list>
+# include <memory>
+# include <ostream>
+# include <string>
+# include <string_view>
+# include <type_traits>
+# include <utility>
+#endif // UPA_MODULE
 
 namespace upa {
 
@@ -3073,18 +3313,20 @@ constexpr bool is_iterable_pairs_v<T, std::void_t<decltype(
 // enable if `Base` is not the base class of `T`
 template<class Base, class T>
 using enable_if_not_base_of_t = std::enable_if_t<
-    !std::is_base_of_v<Base, std::decay_t<T>>, int
->;
+    !std::is_base_of_v<Base, std::decay_t<T>>, int>;
 
 } // namespace detail
 
 
 // forward declarations
 
-class url;
 namespace detail {
     class url_search_params_ptr;
 } // namespace detail
+
+UPA_EXPORT_BEGIN
+
+class url;
 
 /// @brief URLSearchParams class
 ///
@@ -3131,7 +3373,7 @@ public:
     ///
     /// @param[in] query string to parse
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    explicit url_search_params(StrT&& query)
+    inline explicit url_search_params(StrT&& query)
         : params_(do_parse(true, std::forward<StrT>(query)))
     {}
 
@@ -3143,7 +3385,7 @@ public:
         detail::enable_if_not_base_of_t<url_search_params, ConT> = 0,
         std::enable_if_t<detail::is_iterable_pairs_v<ConT>, int> = 0
     >
-    explicit url_search_params(ConT&& cont) {
+    inline explicit url_search_params(ConT&& cont) {
         for (const auto& p : cont) {
             params_.emplace_back(make_string(p.first), make_string(p.second));
         }
@@ -3331,38 +3573,38 @@ public:
     // Iterators
 
     /// @return an iterator to the beginning of name-value list
-    [[nodiscard]] const_iterator begin() const noexcept { return params_.begin(); }
+    [[nodiscard]] inline const_iterator begin() const noexcept { return params_.begin(); }
 
     /// @return an iterator to the beginning of name-value list
-    [[nodiscard]] const_iterator cbegin() const noexcept { return params_.cbegin(); }
+    [[nodiscard]] inline const_iterator cbegin() const noexcept { return params_.cbegin(); }
 
     /// @return an iterator to the end of name-value list
-    [[nodiscard]] const_iterator end() const noexcept { return params_.end(); }
+    [[nodiscard]] inline const_iterator end() const noexcept { return params_.end(); }
 
     /// @return an iterator to the end of name-value list
-    [[nodiscard]] const_iterator cend() const noexcept { return params_.cend(); }
+    [[nodiscard]] inline const_iterator cend() const noexcept { return params_.cend(); }
 
     /// @return a reverse iterator to the beginning of name-value list
-    [[nodiscard]] const_reverse_iterator rbegin() const noexcept { return params_.rbegin(); }
+    [[nodiscard]] inline const_reverse_iterator rbegin() const noexcept { return params_.rbegin(); }
 
     /// @return a reverse iterator to the beginning of name-value list
-    [[nodiscard]] const_reverse_iterator crbegin() const noexcept { return params_.crbegin(); }
+    [[nodiscard]] inline const_reverse_iterator crbegin() const noexcept { return params_.crbegin(); }
 
     /// @return a reverse iterator to the end of name-value list
-    [[nodiscard]] const_reverse_iterator rend() const noexcept { return params_.rend(); }
+    [[nodiscard]] inline const_reverse_iterator rend() const noexcept { return params_.rend(); }
 
     /// @return a reverse iterator to the end of name-value list
-    [[nodiscard]] const_reverse_iterator crend() const noexcept { return params_.crend(); }
+    [[nodiscard]] inline const_reverse_iterator crend() const noexcept { return params_.crend(); }
 
     // Capacity
 
     /// Checks whether the name-value list is empty
     ///
     /// @return `true` if the container is empty, `false` otherwise
-    [[nodiscard]] bool empty() const noexcept { return params_.empty(); }
+    [[nodiscard]] inline bool empty() const noexcept { return params_.empty(); }
 
     /// @return the number of elements in the name-value list
-    [[nodiscard]] size_type size() const noexcept { return params_.size(); }
+    [[nodiscard]] inline size_type size() const noexcept { return params_.size(); }
 
     // Utils
 
@@ -3388,11 +3630,11 @@ private:
     void clear_params() noexcept;
     void copy_params(const url_search_params& other);
     void move_params(url_search_params&& other) noexcept;
-    void parse_params(string_view query);
+    void parse_params(std::string_view query);
 
     void update();
 
-    static UPA_API void urlencode_sv(std::string& encoded, string_view value);
+    static UPA_API void urlencode_sv(std::string& encoded, std::string_view value);
 
     friend class url;
     friend class detail::url_search_params_ptr;
@@ -3404,50 +3646,51 @@ private:
     url* url_ptr_ = nullptr;
 };
 
+UPA_EXPORT_END
 
 namespace detail {
 
 class url_search_params_ptr
 {
 public:
-    url_search_params_ptr() noexcept = default;
+    constexpr url_search_params_ptr() noexcept = default;
 
     // copy constructor initializes to nullptr
-    url_search_params_ptr(const url_search_params_ptr&) noexcept {}
+    constexpr url_search_params_ptr(const url_search_params_ptr&) noexcept {}
     url_search_params_ptr& operator=(const url_search_params_ptr& other);
 
     // move constructor/assignment
-    url_search_params_ptr(url_search_params_ptr&& other) noexcept = default;
-    url_search_params_ptr& operator=(url_search_params_ptr&& other) noexcept = default;
+    UPA_CONSTEXPR_23 url_search_params_ptr(url_search_params_ptr&& other) noexcept = default;
+    UPA_CONSTEXPR_23 url_search_params_ptr& operator=(url_search_params_ptr&& other) noexcept = default;
 
     // destructor
-    ~url_search_params_ptr() = default;
+    UPA_CONSTEXPR_23 ~url_search_params_ptr() = default;
 
-    void init(url* url_ptr) {
+    inline void init(url* url_ptr) {
         ptr_.reset(new url_search_params(url_ptr)); // NOLINT(cppcoreguidelines-owning-memory)
     }
 
-    void set_url_ptr(url* url_ptr) noexcept {
+    inline void set_url_ptr(url* url_ptr) noexcept {
         if (ptr_)
             ptr_->url_ptr_ = url_ptr;
     }
 
-    void clear_params() noexcept {
+    inline void clear_params() noexcept {
         assert(ptr_);
         ptr_->clear_params();
     }
-    void parse_params(string_view query) {
+    inline void parse_params(std::string_view query) {
         assert(ptr_);
         ptr_->parse_params(query);
     }
 
-    explicit operator bool() const noexcept {
+    UPA_CONSTEXPR_23 explicit operator bool() const noexcept {
         return static_cast<bool>(ptr_);
     }
-    url_search_params& operator*() const {
+    UPA_CONSTEXPR_23 url_search_params& operator*() const {
         return *ptr_;
     }
-    url_search_params* operator->() const noexcept {
+    UPA_CONSTEXPR_23 url_search_params* operator->() const noexcept {
         return ptr_.get();
     }
 private:
@@ -3528,7 +3771,7 @@ inline void url_search_params::move_params(url_search_params&& other) noexcept {
     is_sorted_ = other.is_sorted_;
 }
 
-inline void url_search_params::parse_params(string_view query) {
+inline void url_search_params::parse_params(std::string_view query) {
     params_ = do_parse(false, query);
     is_sorted_ = false;
 }
@@ -3778,6 +4021,8 @@ inline std::string url_search_params::to_string() const {
     return query;
 }
 
+UPA_EXPORT_BEGIN
+
 // Non-member functions
 
 /// @brief Performs stream output on URL search parameters
@@ -3805,6 +4050,7 @@ inline void swap(url_search_params& lhs, url_search_params& rhs) noexcept {
     lhs.swap(rhs);
 }
 
+UPA_EXPORT_END
 
 } // namespace upa
 
@@ -3822,10 +4068,10 @@ inline void swap(url_search_params& lhs, url_search_params& rhs) noexcept {
 // NOLINTBEGIN(*-macro-*)
 
 #define UPA_URL_VERSION_MAJOR 2
-#define UPA_URL_VERSION_MINOR 4
+#define UPA_URL_VERSION_MINOR 5
 #define UPA_URL_VERSION_PATCH 0
 
-#define UPA_URL_VERSION "2.4.0"
+#define UPA_URL_VERSION "2.5.0"
 
 /// @brief Encode version to one number
 #define UPA_MAKE_VERSION_NUM(n1, n2, n3) ((n1) << 16 | (n2) << 8 | (n3))
@@ -3842,19 +4088,22 @@ inline void swap(url_search_params& lhs, url_search_params& rhs) noexcept {
         // IWYU pragma: export
 // #include "util.h"
 
-#include <algorithm>
-#include <array>
-#include <cassert>
-#include <cstddef>
-#include <cstdint> // uint8_t
-#include <filesystem>
-#include <functional> // std::hash
-#include <iterator>
-#include <ostream>
-#include <string>
-#include <type_traits>
-#include <utility>
-#include <vector>
+#ifndef UPA_MODULE
+# include <algorithm>
+# include <array>
+# include <cassert>
+# include <cstddef>
+# include <cstdint> // uint8_t
+# include <filesystem>
+# include <functional> // std::hash
+# include <iterator>
+# include <ostream>
+# include <string>
+# include <string_view>
+# include <type_traits>
+# include <utility>
+# include <vector>
+#endif // UPA_MODULE
 
 // not yet
 // #define UPA_URL_USE_ENCODING
@@ -3870,7 +4119,7 @@ class url_parser;
 // Scheme info
 
 struct alignas(32) scheme_info {
-    string_view scheme;
+    std::string_view scheme;
     int default_port;           // -1 if none
     unsigned is_special : 1;    // "ftp", "file", "http", "https", "ws", "wss"
     unsigned is_file : 1;       // "file"
@@ -3878,13 +4127,15 @@ struct alignas(32) scheme_info {
     unsigned is_ws : 1;         // "ws", "wss"
 };
 
-UPA_API const scheme_info* get_scheme_info(string_view src);
+UPA_API const scheme_info* get_scheme_info(std::string_view src);
 
 // Values of the what() function of url_error exception
 inline constexpr const char* kURLParseError = "URL parse error";
 inline constexpr const char* kBaseURLParseError = "Base URL parse error";
 
 } // namespace detail
+
+UPA_EXPORT_BEGIN
 
 /// @brief URL class
 ///
@@ -3957,8 +4208,8 @@ public:
     /// @param[in] str_url URL string to parse
     /// @param[in] pbase   pointer to base URL, may be `nullptr`
     template <class T, enable_if_str_arg_t<T> = 0>
-    explicit url(T&& str_url, const url* pbase = nullptr)
-        : url(std::forward<T>(str_url), pbase, detail::kURLParseError)
+    inline explicit url(const T& str_url, const url* pbase = nullptr)
+        : url{ str_url, pbase, detail::kURLParseError }
     {}
 
     /// @brief Parsing constructor.
@@ -3968,8 +4219,8 @@ public:
     /// @param[in] str_url URL string to parse
     /// @param[in] base    base URL
     template <class T, enable_if_str_arg_t<T> = 0>
-    explicit url(T&& str_url, const url& base)
-        : url(std::forward<T>(str_url), &base, detail::kURLParseError)
+    inline explicit url(const T& str_url, const url& base)
+        : url{ str_url, &base, detail::kURLParseError }
     {}
 
     /// @brief Parsing constructor.
@@ -3979,8 +4230,8 @@ public:
     /// @param[in] str_url  URL string to parse
     /// @param[in] str_base base URL string
     template <class T, class TB, enable_if_str_arg_t<T> = 0, enable_if_str_arg_t<TB> = 0>
-    explicit url(T&& str_url, TB&& str_base)
-        : url(std::forward<T>(str_url), url(std::forward<TB>(str_base), nullptr, detail::kBaseURLParseError))
+    inline explicit url(const T& str_url, const TB& str_base)
+        : url{ str_url, url{ str_base, nullptr, detail::kBaseURLParseError } }
     {}
 
     /// destructor
@@ -4006,8 +4257,8 @@ public:
     /// @param[in] base    pointer to base URL, may be nullptr
     /// @return error code (@a validation_errc::ok on success)
     template <class T, enable_if_str_arg_t<T> = 0>
-    validation_errc parse(T&& str_url, const url* base = nullptr) {
-        const auto inp = make_str_arg(std::forward<T>(str_url));
+    inline validation_errc parse(const T& str_url, const url* base = nullptr) {
+        const auto inp = make_str_arg(str_url);
         return do_parse(inp.begin(), inp.end(), base);
     }
 
@@ -4017,8 +4268,8 @@ public:
     /// @param[in] base    base URL
     /// @return error code (@a validation_errc::ok on success)
     template <class T, enable_if_str_arg_t<T> = 0>
-    validation_errc parse(T&& str_url, const url& base) {
-        return parse(std::forward<T>(str_url), &base);
+    inline validation_errc parse(const T& str_url, const url& base) {
+        return parse(str_url, &base);
     }
 
     /// @brief Parses given URL string against base URL.
@@ -4027,11 +4278,11 @@ public:
     /// @param[in] str_base base URL string
     /// @return error code (@a validation_errc::ok on success)
     template <class T, class TB, enable_if_str_arg_t<T> = 0, enable_if_str_arg_t<TB> = 0>
-    validation_errc parse(T&& str_url, TB&& str_base) {
+    inline validation_errc parse(const T& str_url, const TB& str_base) {
         upa::url base;
-        const auto res = base.parse(std::forward<TB>(str_base), nullptr);
+        const auto res = base.parse(str_base, nullptr);
         return res == validation_errc::ok
-            ? parse(std::forward<T>(str_url), &base)
+            ? parse(str_url, &base)
             : res;
     }
 
@@ -4044,9 +4295,9 @@ public:
     /// @param[in] pbase   pointer to base URL, may be `nullptr`
     /// @return true if given @a str_url can be parsed against @a *pbase
     template <class T, enable_if_str_arg_t<T> = 0>
-    [[nodiscard]] static bool can_parse(T&& str_url, const url* pbase = nullptr) {
+    [[nodiscard]] static inline bool can_parse(const T& str_url, const url* pbase = nullptr) {
         upa::url url;
-        return url.for_can_parse(std::forward<T>(str_url), pbase) == validation_errc::ok;
+        return url.for_can_parse(str_url, pbase) == validation_errc::ok;
     }
 
     /// @brief Checks if a given URL string can be successfully parsed
@@ -4058,8 +4309,8 @@ public:
     /// @param[in] base    base URL
     /// @return true if given @a str_url can be parsed against base URL
     template <class T, enable_if_str_arg_t<T> = 0>
-    [[nodiscard]] static bool can_parse(T&& str_url, const url& base) {
-        return can_parse(std::forward<T>(str_url), &base);
+    [[nodiscard]] static inline bool can_parse(const T& str_url, const url& base) {
+        return can_parse(str_url, &base);
     }
 
     /// @brief Checks if a given URL string can be successfully parsed
@@ -4072,11 +4323,11 @@ public:
     /// @param[in] str_base base URL string
     /// @return true if given @a str_url can be parsed against @a str_base URL string
     template <class T, class TB, enable_if_str_arg_t<T> = 0, enable_if_str_arg_t<TB> = 0>
-    [[nodiscard]] static bool can_parse(T&& str_url, TB&& str_base) {
+    [[nodiscard]] static inline bool can_parse(const T& str_url, const TB& str_base) {
         upa::url base;
         return
-            base.for_can_parse(std::forward<TB>(str_base), nullptr) == validation_errc::ok &&
-            can_parse(std::forward<T>(str_url), &base);
+            base.for_can_parse(str_base, nullptr) == validation_errc::ok &&
+            can_parse(str_url, &base);
     }
 
     // Setters
@@ -4089,10 +4340,10 @@ public:
     /// @param[in] str URL string to parse
     /// @return `true` - on success; `false` - on failure
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool href(StrT&& str);
-    /// Equivalent to @link href(StrT&& str) @endlink
+    bool href(const StrT& str);
+    /// Equivalent to @link href(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_href(StrT&& str) { return href(std::forward<StrT>(str)); }
+    inline bool set_href(const StrT& str) { return href(str); }
 
     /// @brief The protocol setter
     ///
@@ -4102,10 +4353,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - on failure (URL protocol unchanged)
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool protocol(StrT&& str);
-    /// Equivalent to @link protocol(StrT&& str) @endlink
+    bool protocol(const StrT& str);
+    /// Equivalent to @link protocol(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_protocol(StrT&& str) { return protocol(std::forward<StrT>(str)); }
+    inline bool set_protocol(const StrT& str) { return protocol(str); }
 
     /// @brief The username setter
     ///
@@ -4115,10 +4366,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - if username can not be set
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool username(StrT&& str);
-    /// Equivalent to @link username(StrT&& str) @endlink
+    bool username(const StrT& str);
+    /// Equivalent to @link username(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_username(StrT&& str) { return username(std::forward<StrT>(str)); }
+    inline bool set_username(const StrT& str) { return username(str); }
 
     /// @brief The password setter
     ///
@@ -4128,10 +4379,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - if password can not be set
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool password(StrT&& str);
-    /// Equivalent to @link password(StrT&& str) @endlink
+    bool password(const StrT& str);
+    /// Equivalent to @link password(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_password(StrT&& str) { return password(std::forward<StrT>(str)); }
+    inline bool set_password(const StrT& str) { return password(str); }
 
     /// @brief The host setter
     ///
@@ -4141,10 +4392,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - on failure (URL's host and port unchanged)
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool host(StrT&& str);
-    /// Equivalent to @link host(StrT&& str) @endlink
+    bool host(const StrT& str);
+    /// Equivalent to @link host(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_host(StrT&& str) { return host(std::forward<StrT>(str)); }
+    inline bool set_host(const StrT& str) { return host(str); }
 
     /// @brief The hostname setter
     ///
@@ -4154,10 +4405,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - on failure (URL's host unchanged)
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool hostname(StrT&& str);
-    /// Equivalent to @link hostname(StrT&& str) @endlink
+    bool hostname(const StrT& str);
+    /// Equivalent to @link hostname(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_hostname(StrT&& str) { return hostname(std::forward<StrT>(str)); }
+    inline bool set_hostname(const StrT& str) { return hostname(str); }
 
     /// @brief The port setter
     ///
@@ -4167,10 +4418,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - on failure (URL's port unchanged)
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool port(StrT&& str);
-    /// Equivalent to @link port(StrT&& str) @endlink
+    bool port(const StrT& str);
+    /// Equivalent to @link port(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_port(StrT&& str) { return port(std::forward<StrT>(str)); }
+    inline bool set_port(const StrT& str) { return port(str); }
 
     /// @brief The pathname setter
     ///
@@ -4180,10 +4431,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - on failure (URL's path unchanged)
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool pathname(StrT&& str);
-    /// Equivalent to @link pathname(StrT&& str) @endlink
+    bool pathname(const StrT& str);
+    /// Equivalent to @link pathname(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_pathname(StrT&& str) { return pathname(std::forward<StrT>(str)); }
+    inline bool set_pathname(const StrT& str) { return pathname(str); }
 
     /// @brief The search setter
     ///
@@ -4193,10 +4444,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - on failure (URL's query unchanged)
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool search(StrT&& str);
-    /// Equivalent to @link search(StrT&& str) @endlink
+    bool search(const StrT& str);
+    /// Equivalent to @link search(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_search(StrT&& str) { return search(std::forward<StrT>(str)); }
+    inline bool set_search(const StrT& str) { return search(str); }
 
     /// @brief The hash setter
     ///
@@ -4206,10 +4457,10 @@ public:
     /// @param[in] str string to parse
     /// @return `true` - on success; `false` - on failure (URL's fragment unchanged)
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool hash(StrT&& str);
-    /// Equivalent to @link hash(StrT&& str) @endlink
+    bool hash(const StrT& str);
+    /// Equivalent to @link hash(const StrT& str) @endlink
     template <class StrT, enable_if_str_arg_t<StrT> = 0>
-    bool set_hash(StrT&& str) { return hash(std::forward<StrT>(str)); }
+    inline bool set_hash(const StrT& str) { return hash(str); }
 
     // Getters
 
@@ -4218,9 +4469,9 @@ public:
     /// More info: https://url.spec.whatwg.org/#dom-url-href
     ///
     /// @return serialized URL
-    [[nodiscard]] string_view href() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view href() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link href() const @endlink
-    [[nodiscard]] string_view get_href() const UPA_LIFETIMEBOUND { return href(); }
+    [[nodiscard]] inline std::string_view get_href() const UPA_LIFETIMEBOUND { return href(); }
 
     /// @brief The origin getter
     ///
@@ -4237,45 +4488,45 @@ public:
     /// More info: https://url.spec.whatwg.org/#dom-url-protocol
     ///
     /// @return URL's scheme, followed by U+003A (:)
-    [[nodiscard]] string_view protocol() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view protocol() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link protocol() const @endlink
-    [[nodiscard]] string_view get_protocol() const UPA_LIFETIMEBOUND { return protocol(); }
+    [[nodiscard]] inline std::string_view get_protocol() const UPA_LIFETIMEBOUND { return protocol(); }
 
     /// @brief The username getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-username
     ///
     /// @return URL’s username
-    [[nodiscard]] string_view username() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view username() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link username() const @endlink
-    [[nodiscard]] string_view get_username() const UPA_LIFETIMEBOUND { return username(); }
+    [[nodiscard]] inline std::string_view get_username() const UPA_LIFETIMEBOUND { return username(); }
 
     /// @brief The password getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-password
     ///
     /// @return URL’s password
-    [[nodiscard]] string_view password() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view password() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link password() const @endlink
-    [[nodiscard]] string_view get_password() const UPA_LIFETIMEBOUND { return password(); }
+    [[nodiscard]] inline std::string_view get_password() const UPA_LIFETIMEBOUND { return password(); }
 
     /// @brief The host getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-host
     ///
     /// @return URL’s host, serialized, followed by U+003A (:) and URL’s port, serialized
-    [[nodiscard]] string_view host() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view host() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link host() const @endlink
-    [[nodiscard]] string_view get_host() const UPA_LIFETIMEBOUND { return host(); }
+    [[nodiscard]] inline std::string_view get_host() const UPA_LIFETIMEBOUND { return host(); }
 
     /// @brief The hostname getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-hostname
     ///
     /// @return URL’s host, serialized
-    [[nodiscard]] string_view hostname() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view hostname() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link hostname() const @endlink
-    [[nodiscard]] string_view get_hostname() const UPA_LIFETIMEBOUND { return hostname(); }
+    [[nodiscard]] inline std::string_view get_hostname() const UPA_LIFETIMEBOUND { return hostname(); }
 
     /// @brief The host_type getter
     ///
@@ -4287,9 +4538,9 @@ public:
     /// More info: https://url.spec.whatwg.org/#dom-url-port
     ///
     /// @return URL’s port, serialized, if URL’s port is not null, otherwise empty string
-    [[nodiscard]] string_view port() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view port() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link port() const @endlink
-    [[nodiscard]] string_view get_port() const UPA_LIFETIMEBOUND { return port(); }
+    [[nodiscard]] inline std::string_view get_port() const UPA_LIFETIMEBOUND { return port(); }
 
     /// @return URL’s port, converted to `int` value, if URL’s port is not null,
     ///   otherwise `-1`
@@ -4303,36 +4554,36 @@ public:
     /// @brief The path getter
     ///
     /// @return URL's path, serialized, followed by U+003F (?) and URL’s query
-    [[nodiscard]] string_view path() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view path() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link path() const @endlink
-    [[nodiscard]] string_view get_path() const UPA_LIFETIMEBOUND { return path(); }
+    [[nodiscard]] inline std::string_view get_path() const UPA_LIFETIMEBOUND { return path(); }
 
     /// @brief The pathname getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-pathname
     ///
     /// @return URL’s path, serialized
-    [[nodiscard]] string_view pathname() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view pathname() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link pathname() const @endlink
-    [[nodiscard]] string_view get_pathname() const UPA_LIFETIMEBOUND { return pathname(); }
+    [[nodiscard]] inline std::string_view get_pathname() const UPA_LIFETIMEBOUND { return pathname(); }
 
     /// @brief The search getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-search
     ///
     /// @return empty string or U+003F (?), followed by URL’s query
-    [[nodiscard]] string_view search() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view search() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link search() const @endlink
-    [[nodiscard]] string_view get_search() const UPA_LIFETIMEBOUND { return search(); }
+    [[nodiscard]] inline std::string_view get_search() const UPA_LIFETIMEBOUND { return search(); }
 
     /// @brief The hash getter
     ///
     /// More info: https://url.spec.whatwg.org/#dom-url-hash
     ///
     /// @return empty string or U+0023 (#), followed by URL’s fragment
-    [[nodiscard]] string_view hash() const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view hash() const UPA_LIFETIMEBOUND;
     /// Equivalent to @link hash() const @endlink
-    [[nodiscard]] string_view get_hash() const UPA_LIFETIMEBOUND { return hash(); }
+    [[nodiscard]] inline std::string_view get_hash() const UPA_LIFETIMEBOUND { return hash(); }
 
     /// @brief The searchParams getter
     ///
@@ -4352,12 +4603,12 @@ public:
 
     /// @brief URL serializer
     ///
-    /// Returns serialized URL in a string_view as defined here:
+    /// Returns serialized URL in a std::string_view as defined here:
     /// https://url.spec.whatwg.org/#concept-url-serializer
     ///
     /// @param[in] exclude_fragment exclude fragment when serializing
-    /// @return serialized URL as string_view
-    [[nodiscard]] string_view serialize(bool exclude_fragment = false) const UPA_LIFETIMEBOUND;
+    /// @return serialized URL as std::string_view
+    [[nodiscard]] std::string_view serialize(bool exclude_fragment = false) const UPA_LIFETIMEBOUND;
 
     // Get url info
 
@@ -4421,7 +4672,7 @@ public:
     ///
     /// @param[in] t URL's part
     /// @return URL's part string; it is empty if part is empty or null
-    [[nodiscard]] string_view get_part_view(PartType t) const UPA_LIFETIMEBOUND;
+    [[nodiscard]] std::string_view get_part_view(PartType t) const UPA_LIFETIMEBOUND;
 
     /// @brief Checks whether the URL's part (URL record member) is empty or null
     ///
@@ -4485,40 +4736,28 @@ private:
         INITIAL_FLAGS = SCHEME_FLAG | USERNAME_FLAG | PASSWORD_FLAG | PATH_FLAG,
     };
 
-    // part flag masks
-    static constexpr unsigned kPartFlagMask[url::PART_COUNT] = {
-        SCHEME_FLAG,
-        0,  // SCHEME_SEP
-        USERNAME_FLAG,
-        PASSWORD_FLAG,
-        0,  // HOST_START
-        HOST_FLAG | HOST_TYPE_MASK,
-        PORT_FLAG,
-        0,  // PATH_PREFIX
-        PATH_FLAG | OPAQUE_PATH_FLAG,
-        QUERY_FLAG,
-        FRAGMENT_FLAG
-    };
-
     // parsing constructor
     template <class T, enable_if_str_arg_t<T> = 0>
-    explicit url(T&& str_url, const url* base, const char* what_arg);
+    explicit url(const T& str_url, const url* base, const char* what_arg);
 
     // parser
     template <typename CharT>
     validation_errc do_parse(const CharT* first, const CharT* last, const url* base);
 
     template <class T, enable_if_str_arg_t<T> = 0>
-    validation_errc for_can_parse(T&& str_url, const url* base);
+    validation_errc for_can_parse(const T& str_url, const url* base);
 
     // set scheme
-    void set_scheme_str(string_view str);
+    void set_scheme_str(std::string_view str);
     void set_scheme(const url& src);
-    void set_scheme(string_view str);
+    void set_scheme(std::string_view str);
     void set_scheme(std::size_t scheme_length);
 
+    // Get origin of special URL excluding file URL
+    std::string origin_of_special_url() const;
+
     // path util
-    string_view get_path_first_string(std::size_t len) const UPA_LIFETIMEBOUND;
+    std::string_view get_path_first_string(std::size_t len) const UPA_LIFETIMEBOUND;
     // path shortening
     bool get_path_rem_last(std::size_t& path_end, std::size_t& path_segment_count) const;
     bool get_shorten_path(std::size_t& path_end, std::size_t& path_segment_count) const;
@@ -4557,16 +4796,17 @@ private:
     friend class url_search_params;
 };
 
+UPA_EXPORT_END
 
 namespace detail {
 
-class url_serializer : public host_output {
+class UPA_SO_VISIBLE url_serializer : public host_output {
 public:
     url_serializer() = delete;
     url_serializer(const url_serializer&) = delete;
     url_serializer& operator=(const url_serializer&) = delete;
 
-    explicit url_serializer(url& dest_url, bool need_save = true)
+    inline explicit url_serializer(url& dest_url, bool need_save = true)
         : host_output(need_save)
         , url_(dest_url)
         , last_pt_(url::SCHEME)
@@ -4574,16 +4814,18 @@ public:
 
     ~url_serializer() override = default;
 
-    void new_url() {
+    inline void new_url() {
         if (!url_.empty())
             url_.clear();
     }
-    virtual void reserve(std::size_t new_cap) { url_.norm_url_.reserve(new_cap); }
+    inline virtual void reserve(std::size_t new_cap) {
+        util::reserve(url_.norm_url_, new_cap);
+    }
 
     // set data
-    void set_scheme(const url& src) { url_.set_scheme(src); }
-    void set_scheme(string_view str) { url_.set_scheme(str); }
-    void set_scheme(std::size_t scheme_length) { url_.set_scheme(scheme_length); }
+    inline void set_scheme(const url& src) { url_.set_scheme(src); }
+    inline void set_scheme(std::string_view str) { url_.set_scheme(str); }
+    inline void set_scheme(std::size_t scheme_length) { url_.set_scheme(scheme_length); }
 
     // set scheme
     virtual std::string& start_scheme();
@@ -4594,7 +4836,7 @@ public:
     virtual std::string& start_part(url::PartType new_pt);
     virtual void save_part();
 
-    virtual void clear_part(url::PartType /*pt*/) {}
+    inline virtual void clear_part(url::PartType /*pt*/) {}
 
     // set empty host
     void set_empty_host();
@@ -4626,29 +4868,29 @@ public:
     void append_parts(const url& src, url::PartType t1, url::PartType t2, PathOpFn pathOpFn = nullptr);
 
     // flags
-    void set_flag(const url::UrlFlag flag) { url_.set_flag(flag); }
-    void set_host_type(const HostType ht) { url_.set_host_type(ht); }
+    inline void set_flag(const url::UrlFlag flag) { url_.set_flag(flag); }
+    inline void set_host_type(const HostType ht) { url_.set_host_type(ht); }
     // IMPORTANT: has-an-opaque-path flag must be set before or just after
     // SCHEME set; because other part's serialization depends on this flag
-    void set_has_opaque_path() {
+    inline void set_has_opaque_path() {
         assert(last_pt_ == url::SCHEME);
         url_.set_has_opaque_path();
     }
 
     // get info
-    string_view get_part_view(url::PartType t) const { return url_.get_part_view(t); }
-    bool is_empty(const url::PartType t) const { return url_.is_empty(t); }
-    virtual bool is_empty_path() const {
+    inline std::string_view get_part_view(url::PartType t) const { return url_.get_part_view(t); }
+    inline bool is_empty(const url::PartType t) const { return url_.is_empty(t); }
+    inline virtual bool is_empty_path() const {
         assert(!url_.has_opaque_path());
         // path_segment_count_ has meaning only if path is a list (path isn't opaque)
         return url_.path_segment_count_ == 0;
     }
-    bool is_null(const url::PartType t) const noexcept { return url_.is_null(t); }
-    bool is_special_scheme() const noexcept { return url_.is_special_scheme(); }
-    bool is_file_scheme() const noexcept { return url_.is_file_scheme(); }
-    bool has_credentials() const { return url_.has_credentials(); }
-    const detail::scheme_info* scheme_inf() const noexcept { return url_.scheme_inf_; }
-    int port_int() const { return url_.port_int(); }
+    inline bool is_null(const url::PartType t) const noexcept { return url_.is_null(t); }
+    inline bool is_special_scheme() const noexcept { return url_.is_special_scheme(); }
+    inline bool is_file_scheme() const noexcept { return url_.is_file_scheme(); }
+    inline bool has_credentials() const { return url_.has_credentials(); }
+    inline const detail::scheme_info* scheme_inf() const noexcept { return url_.scheme_inf_; }
+    inline int port_int() const { return url_.port_int(); }
 
 protected:
     void adjust_path_prefix();
@@ -4666,13 +4908,13 @@ protected:
 };
 
 
-class url_setter : public url_serializer {
+class UPA_SO_VISIBLE url_setter : public url_serializer {
 public:
     url_setter() = delete;
     url_setter(const url_setter&) = delete;
     url_setter& operator=(const url_setter&) = delete;
 
-    explicit url_setter(url& dest_url)
+    inline explicit url_setter(url& dest_url)
         : url_serializer(dest_url)
         , use_strp_(true)
         , curr_pt_(url::SCHEME)
@@ -4748,7 +4990,7 @@ public:
     };
 
     template <typename CharT>
-    static validation_errc url_parse(url_serializer& urls, const CharT* first, const CharT* last, const url* base, State state_override = not_set_state);
+    static validation_errc url_parse(url_serializer& urls, const CharT* first, const CharT* last, const url* base, State state_override);
 
     template <typename CharT>
     static validation_errc parse_host(url_serializer& urls, const CharT* first, const CharT* last);
@@ -4911,7 +5153,7 @@ constexpr bool starts_with_windows_drive(const CharT* pointer, const CharT* last
 
 // Check url's pathname has Windows drive, i.e. starts with "/C:/" or is "/C:"
 // see also: detail::starts_with_windows_drive
-constexpr bool pathname_has_windows_os_drive(string_view pathname) noexcept {
+constexpr bool pathname_has_windows_os_drive(std::string_view pathname) noexcept {
     return
         (pathname.length() == 3 || (pathname.length() > 3 && is_windows_slash(pathname[3]))) &&
         is_windows_slash(pathname[0]) &&
@@ -4983,7 +5225,7 @@ inline void url::move_record(url& other) noexcept {
 
 // url getters
 
-inline string_view url::href() const UPA_LIFETIMEBOUND {
+inline std::string_view url::href() const UPA_LIFETIMEBOUND {
     return norm_url_;
 }
 
@@ -5000,37 +5242,41 @@ inline std::string url::origin() const {
     if (is_special_scheme()) {
         if (is_file_scheme())
             return "null"; // opaque origin
-        // "scheme://"
-        std::string str_origin(norm_url_, 0, part_end_[SCHEME_SEP]);
-        // "host:port"
-        str_origin.append(norm_url_.data() + part_end_[HOST_START], norm_url_.data() + part_end_[PORT]);
-        return str_origin;
+        return origin_of_special_url();
     }
-    if (get_part_view(SCHEME) == string_view{ "blob", 4 }) {
+    if (get_part_view(SCHEME) == std::string_view{ "blob", 4 }) {
         // Note: this library does not support blob URL store, so it allways assumes
         // URL's blob URL entry is null and retrieves origin from the URL's path.
         url path_url;
         if (path_url.parse(get_part_view(PATH)) == validation_errc::ok &&
             path_url.is_http_scheme())
-            return path_url.origin();
+            return path_url.origin_of_special_url();
     }
     return "null"; // opaque origin
 }
 
-inline string_view url::protocol() const UPA_LIFETIMEBOUND {
+inline std::string url::origin_of_special_url() const {
+    // "scheme://"
+    std::string str_origin(norm_url_, 0, part_end_[SCHEME_SEP]);
+    // "host:port"
+    str_origin.append(norm_url_.data() + part_end_[HOST_START], norm_url_.data() + part_end_[PORT]);
+    return str_origin;
+}
+
+inline std::string_view url::protocol() const UPA_LIFETIMEBOUND {
     // "scheme:"
     return { norm_url_.data(), part_end_[SCHEME] ? part_end_[SCHEME] + 1 : 0 };
 }
 
-inline string_view url::username() const UPA_LIFETIMEBOUND {
+inline std::string_view url::username() const UPA_LIFETIMEBOUND {
     return get_part_view(USERNAME);
 }
 
-inline string_view url::password() const UPA_LIFETIMEBOUND {
+inline std::string_view url::password() const UPA_LIFETIMEBOUND {
     return get_part_view(PASSWORD);
 }
 
-inline string_view url::host() const UPA_LIFETIMEBOUND {
+inline std::string_view url::host() const UPA_LIFETIMEBOUND {
     if (is_null(HOST))
         return {};
     // "hostname:port"
@@ -5039,7 +5285,7 @@ inline string_view url::host() const UPA_LIFETIMEBOUND {
     return { norm_url_.data() + b, e - b };
 }
 
-inline string_view url::hostname() const UPA_LIFETIMEBOUND {
+inline std::string_view url::hostname() const UPA_LIFETIMEBOUND {
     return get_part_view(HOST);
 }
 
@@ -5047,7 +5293,7 @@ inline HostType url::host_type() const noexcept {
     return static_cast<HostType>((flags_ & HOST_TYPE_MASK) >> HOST_TYPE_SHIFT);
 }
 
-inline string_view url::port() const UPA_LIFETIMEBOUND {
+inline std::string_view url::port() const UPA_LIFETIMEBOUND {
     return get_part_view(PORT);
 }
 
@@ -5064,20 +5310,20 @@ inline int url::real_port_int() const {
 }
 
 // pathname + search
-inline string_view url::path() const UPA_LIFETIMEBOUND {
+inline std::string_view url::path() const UPA_LIFETIMEBOUND {
     // "pathname?query"
     const std::size_t b = part_end_[PATH - 1];
     const std::size_t e = part_end_[QUERY] ? part_end_[QUERY] : part_end_[PATH];
     return { norm_url_.data() + b, e ? e - b : 0 };
 }
 
-inline string_view url::pathname() const UPA_LIFETIMEBOUND {
+inline std::string_view url::pathname() const UPA_LIFETIMEBOUND {
     // https://url.spec.whatwg.org/#dom-url-pathname
     // already serialized as needed
     return get_part_view(PATH);
 }
 
-inline string_view url::search() const UPA_LIFETIMEBOUND {
+inline std::string_view url::search() const UPA_LIFETIMEBOUND {
     const std::size_t b = part_end_[QUERY - 1];
     const std::size_t e = part_end_[QUERY];
     // is empty?
@@ -5087,7 +5333,7 @@ inline string_view url::search() const UPA_LIFETIMEBOUND {
     return { norm_url_.data() + b, e - b };
 }
 
-inline string_view url::hash() const UPA_LIFETIMEBOUND {
+inline std::string_view url::hash() const UPA_LIFETIMEBOUND {
     const std::size_t b = part_end_[FRAGMENT - 1];
     const std::size_t e = part_end_[FRAGMENT];
     // is empty?
@@ -5119,7 +5365,7 @@ inline void url::parse_search_params() {
         search_params_ptr_.parse_params(get_part_view(QUERY));
 }
 
-inline string_view url::serialize(bool exclude_fragment) const UPA_LIFETIMEBOUND {
+inline std::string_view url::serialize(bool exclude_fragment) const UPA_LIFETIMEBOUND {
     if (exclude_fragment && part_end_[FRAGMENT])
         return { norm_url_.data(), part_end_[QUERY] };
     return norm_url_;
@@ -5135,7 +5381,7 @@ inline bool url::is_valid() const noexcept {
     return !!(flags_ & VALID_FLAG);
 }
 
-inline string_view url::get_part_view(PartType t) const UPA_LIFETIMEBOUND {
+inline std::string_view url::get_part_view(PartType t) const UPA_LIFETIMEBOUND {
     if (t == SCHEME)
         return { norm_url_.data(), part_end_[SCHEME] };
     // begin & end offsets
@@ -5175,7 +5421,7 @@ inline bool url::has_credentials() const {
 
 // set scheme
 
-inline void url::set_scheme_str(string_view str) {
+inline void url::set_scheme_str(std::string_view str) {
     norm_url_.clear(); // clear all
     part_end_[SCHEME] = str.length();
     norm_url_.append(str);
@@ -5187,7 +5433,7 @@ inline void url::set_scheme(const url& src) {
     scheme_inf_ = src.scheme_inf_;
 }
 
-inline void url::set_scheme(string_view str) {
+inline void url::set_scheme(std::string_view str) {
     set_scheme_str(str);
     scheme_inf_ = detail::get_scheme_info(str);
 }
@@ -5222,8 +5468,8 @@ inline bool url::canHaveUsernamePasswordPort() const {
 // Private parsing constructor
 
 template <class T, enable_if_str_arg_t<T>>
-inline url::url(T&& str_url, const url* base, const char* what_arg) {
-    const auto inp = make_str_arg(std::forward<T>(str_url));
+inline url::url(const T& str_url, const url* base, const char* what_arg) {
+    const auto inp = make_str_arg(str_url);
     const auto res = do_parse(inp.begin(), inp.end(), base);
     if (res != validation_errc::ok)
         throw url_error(res, what_arg);
@@ -5268,7 +5514,7 @@ inline validation_errc url::do_parse(const CharT* first, const CharT* last, cons
         detail::do_trim(first, last);
         //TODO-WARN: validation error if trimmed
 
-        return detail::url_parser::url_parse(urls, first, last, base);
+        return detail::url_parser::url_parse(urls, first, last, base, detail::url_parser::not_set_state);
     }();
     if (res == validation_errc::ok) {
         set_flag(VALID_FLAG);
@@ -5278,8 +5524,8 @@ inline validation_errc url::do_parse(const CharT* first, const CharT* last, cons
 }
 
 template <class T, enable_if_str_arg_t<T>>
-validation_errc url::for_can_parse(T&& str_url, const url* base) {
-    const auto inp = make_str_arg(std::forward<T>(str_url));
+validation_errc url::for_can_parse(const T& str_url, const url* base) {
+    const auto inp = make_str_arg(str_url);
     const auto* first = inp.begin();
     const auto* last = inp.end();
     const validation_errc res = [&]() {
@@ -5296,7 +5542,7 @@ validation_errc url::for_can_parse(T&& str_url, const url* base) {
         detail::do_trim(first, last);
         //TODO-WARN: validation error if trimmed
 
-        return detail::url_parser::url_parse(urls, first, last, base);
+        return detail::url_parser::url_parse(urls, first, last, base, detail::url_parser::not_set_state);
     }();
     if (res == validation_errc::ok)
         set_flag(VALID_FLAG);
@@ -5306,10 +5552,10 @@ validation_errc url::for_can_parse(T&& str_url, const url* base) {
 // Setters
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::href(StrT&& str) {
+inline bool url::href(const StrT& str) {
     url u; // parsedURL
 
-    const auto inp = make_str_arg(std::forward<StrT>(str));
+    const auto inp = make_str_arg(str);
     if (u.do_parse(inp.begin(), inp.end(), nullptr) == validation_errc::ok) {
         safe_assign(std::move(u));
         return true;
@@ -5318,22 +5564,22 @@ inline bool url::href(StrT&& str) {
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::protocol(StrT&& str) {
+inline bool url::protocol(const StrT& str) {
     if (is_valid()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
         return detail::url_parser::url_parse(urls, inp.begin(), inp.end(), nullptr, detail::url_parser::scheme_start_state) == validation_errc::ok;
     }
     return false;
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::username(StrT&& str) {
+inline bool url::username(const StrT& str) {
     if (canHaveUsernamePasswordPort()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
 
         std::string& str_username = urls.start_part(url::USERNAME);
         // UTF-8 percent encode it using the userinfo encode set
@@ -5345,11 +5591,11 @@ inline bool url::username(StrT&& str) {
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::password(StrT&& str) {
+inline bool url::password(const StrT& str) {
     if (canHaveUsernamePasswordPort()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
 
         std::string& str_password = urls.start_part(url::PASSWORD);
         // UTF-8 percent encode it using the userinfo encode set
@@ -5361,33 +5607,33 @@ inline bool url::password(StrT&& str) {
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::host(StrT&& str) {
+inline bool url::host(const StrT& str) {
     if (!has_opaque_path() && is_valid()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
         return detail::url_parser::url_parse(urls, inp.begin(), inp.end(), nullptr, detail::url_parser::host_state) == validation_errc::ok;
     }
     return false;
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::hostname(StrT&& str) {
+inline bool url::hostname(const StrT& str) {
     if (!has_opaque_path() && is_valid()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
         return detail::url_parser::url_parse(urls, inp.begin(), inp.end(), nullptr, detail::url_parser::hostname_state) == validation_errc::ok;
     }
     return false;
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::port(StrT&& str) {
+inline bool url::port(const StrT& str) {
     if (canHaveUsernamePasswordPort()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
         const auto* first = inp.begin();
         const auto* last = inp.end();
 
@@ -5401,24 +5647,24 @@ inline bool url::port(StrT&& str) {
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::pathname(StrT&& str) {
+inline bool url::pathname(const StrT& str) {
     if (!has_opaque_path() && is_valid()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
         return detail::url_parser::url_parse(urls, inp.begin(), inp.end(), nullptr, detail::url_parser::path_start_state) == validation_errc::ok;
     }
     return false;
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::search(StrT&& str) {
+inline bool url::search(const StrT& str) {
     bool res = false;
     if (is_valid()) {
         {
             detail::url_setter urls(*this);
 
-            const auto inp = make_str_arg(std::forward<StrT>(str));
+            const auto inp = make_str_arg(str);
             const auto* first = inp.begin();
             const auto* last = inp.end();
 
@@ -5438,11 +5684,11 @@ inline bool url::search(StrT&& str) {
 }
 
 template <class StrT, enable_if_str_arg_t<StrT>>
-inline bool url::hash(StrT&& str) {
+inline bool url::hash(const StrT& str) {
     if (is_valid()) {
         detail::url_setter urls(*this);
 
-        const auto inp = make_str_arg(std::forward<StrT>(str));
+        const auto inp = make_str_arg(str);
         const auto* first = inp.begin();
         const auto* last = inp.end();
 
@@ -5866,7 +6112,7 @@ inline validation_errc url_parser::url_parse(url_serializer& urls, const CharT* 
 
     if (state == file_state) {
         if (!urls.is_file_scheme())
-            urls.set_scheme(string_view{ "file", 4 });
+            urls.set_scheme(std::string_view{ "file", 4 });
         // ensure file URL's host is not null
         urls.set_empty_host();
         // EOF ==> 0 ==> default:
@@ -5936,7 +6182,7 @@ inline validation_errc url_parser::url_parse(url_serializer& urls, const CharT* 
                 urls.append_parts(*base, url::HOST, url::HOST);
                 // path
                 if (!detail::starts_with_windows_drive(pointer, last)) {
-                    const string_view base_path = base->get_path_first_string(2);
+                    const std::string_view base_path = base->get_path_first_string(2);
                     // if base's path[0] is a normalized Windows drive letter
                     if (base_path.length() == 2 &&
                         detail::is_normalized_windows_drive(base_path[0], base_path[1])) {
@@ -5977,7 +6223,7 @@ inline validation_errc url_parser::url_parse(url_serializer& urls, const CharT* 
             if (res != validation_errc::ok || !urls.need_save())
                 return res; // TODO-ERR: failure
             // if host is "localhost", then set host to the empty string
-            if (urls.get_part_view(url::HOST) == string_view{ "localhost", 9 }) {
+            if (urls.get_part_view(url::HOST) == std::string_view{ "localhost", 9 }) {
                 // set empty host
                 urls.empty_host();
             }
@@ -6292,8 +6538,10 @@ template <typename CharT>
 inline void url_parser::do_opaque_path(const CharT* pointer, const CharT* last, std::string& output) {
     using UCharT = std::make_unsigned_t<CharT>;
 
-    // 3. of "opaque path state"
-    // TODO-WARN: 3. [ 1 ... 2 ] validation error.
+    // TODO-WARN in the `opaque path state`:
+    // 3. Otherwise, if c is U+0020 SPACE:
+    //  1. Invalid-URL-unit validation error.
+    // 4. Otherwise, if c is not the EOF code point:
     //  1. If c is not EOF code point, not a URL code point, and not "%", validation error.
     //  2. If c is "%" and remaining does not start with two ASCII hex digits, validation error.
 
@@ -6330,8 +6578,8 @@ inline void url_parser::do_opaque_path(const CharT* pointer, const CharT* last, 
 
 // path util
 
-inline string_view url::get_path_first_string(std::size_t len) const UPA_LIFETIMEBOUND {
-    string_view pathv = get_part_view(PATH);
+inline std::string_view url::get_path_first_string(std::size_t len) const UPA_LIFETIMEBOUND {
+    std::string_view pathv = get_part_view(PATH);
     if (pathv.empty() || has_opaque_path())
         return pathv;
     // skip '/'
@@ -6339,7 +6587,7 @@ inline string_view url::get_path_first_string(std::size_t len) const UPA_LIFETIM
     if (pathv.length() == len || (pathv.length() > len && pathv[len] == '/')) {
         return { pathv.data(), len };
     }
-    return { pathv.data(), 0 };
+    return {};
 }
 
 // path shortening
@@ -6366,7 +6614,7 @@ inline bool url::get_shorten_path(std::size_t& path_end, std::size_t& path_segme
     if (path_segment_count_ == 0)
         return false;
     if (is_file_scheme() && path_segment_count_ == 1) {
-        const string_view path1 = get_path_first_string(2);
+        const std::string_view path1 = get_path_first_string(2);
         if (path1.length() == 2 &&
             detail::is_normalized_windows_drive(path1[0], path1[1]))
             return false;
@@ -6492,7 +6740,7 @@ inline void url_serializer::commit_path() {
 inline void url_serializer::adjust_path_prefix() {
     // "/." path prefix
     // https://url.spec.whatwg.org/#url-serializing (4.1.)
-    string_view new_prefix;
+    std::string_view new_prefix;
     if (is_null(url::HOST) && url_.path_segment_count_ > 1) {
         const auto pathname = get_part_view(url::PATH);
         if (pathname.length() > 1 && pathname[0] == '/' && pathname[1] == '/')
@@ -6549,6 +6797,8 @@ inline void url_serializer::hostDone(HostType ht) {
 // append parts from other url
 
 inline void url_serializer::append_parts(const url& src, url::PartType t1, url::PartType t2, PathOpFn pathOpFn) {
+    if (!need_save()) return;
+
     // See URL serializing
     // https://url.spec.whatwg.org/#concept-url-serializer
     const url::PartType ifirst = [&]() {
@@ -6565,12 +6815,25 @@ inline void url_serializer::append_parts(const url& src, url::PartType t1, url::
         return t1;
     }();
 
-    if (!need_save()) return;
+    // part flag masks
+    static constexpr unsigned kPartFlagMask[url::PART_COUNT] = {
+        url::SCHEME_FLAG,
+        0,  // SCHEME_SEP
+        url::USERNAME_FLAG,
+        url::PASSWORD_FLAG,
+        0,  // HOST_START
+        url::HOST_FLAG | url::HOST_TYPE_MASK,
+        url::PORT_FLAG,
+        0,  // PATH_PREFIX
+        url::PATH_FLAG | url::OPAQUE_PATH_FLAG,
+        url::QUERY_FLAG,
+        url::FRAGMENT_FLAG
+    };
 
     // copy flags; they can be used when copying / serializing url parts below
     unsigned mask = 0;
     for (int ind = t1; ind <= t2; ++ind) {
-        mask |= url::kPartFlagMask[ind];
+        mask |= kPartFlagMask[ind];
     }
     url_.flags_ = (url_.flags_ & ~mask) | (src.flags_ & mask);
 
@@ -6656,7 +6919,7 @@ inline void url_serializer::replace_part(const url::PartType last_pt, const char
 
 //???
 inline void url_setter::reserve(std::size_t new_cap) {
-    strp_.reserve(new_cap);
+    util::reserve(strp_, new_cap);
 }
 
 // set scheme
@@ -6919,6 +7182,7 @@ constexpr bool has_dot_dot_segment(const CharT* first, const CharT* last, IsSlas
 
 } // namespace detail
 
+UPA_EXPORT_BEGIN
 
 // URL utilities (non-member functions)
 
@@ -6996,9 +7260,9 @@ enum class file_path_format {
 ///   [GetFullPathName](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamew),
 ///   [std::filesystem::canonical](https://en.cppreference.com/w/cpp/filesystem/canonical)
 template <class StrT, enable_if_str_arg_t<StrT> = 0>
-[[nodiscard]] inline url url_from_file_path(StrT&& str, file_path_format format = file_path_format::native) {
+[[nodiscard]] inline url url_from_file_path(const StrT& str, file_path_format format = file_path_format::native) {
     using CharT = str_arg_char_t<StrT>;
-    const auto inp = make_str_arg(std::forward<StrT>(str));
+    const auto inp = make_str_arg(str);
     const auto* first = inp.begin();
     const auto* last = inp.end();
 
@@ -7207,6 +7471,8 @@ inline bool check_version() {
         (static_cast<std::uint32_t>(UPA_URL_VERSION_NUM) & sover_mask);
 }
 
+UPA_EXPORT_END
+
 } // namespace upa
 
 
@@ -7215,7 +7481,7 @@ namespace std {
 /// @brief std::hash specialization for upa::url class
 template<>
 struct hash<upa::url> {
-    [[nodiscard]] std::size_t operator()(const upa::url& url) const noexcept {
+    [[nodiscard]] inline std::size_t operator()(const upa::url& url) const noexcept {
         return std::hash<std::string>{}(url.norm_url_);
     }
 };
@@ -7224,7 +7490,7 @@ struct hash<upa::url> {
 
 // Includes that require the url class declaration
 // #include "url_search_params-inl.h"
-// Copyright 2016-2025 Rimas Misevičius
+// Copyright 2016-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -7236,7 +7502,9 @@ struct hash<upa::url> {
 #ifndef UPA_URL_SEARCH_PARAMS_INL_H
 #define UPA_URL_SEARCH_PARAMS_INL_H
 
-#include <memory> // std::addressof
+#ifndef UPA_MODULE
+# include <memory> // std::addressof
+#endif // UPA_MODULE
 
 
 namespace upa {
