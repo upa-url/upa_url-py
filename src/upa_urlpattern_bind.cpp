@@ -1,4 +1,4 @@
-// Copyright 2025 Rimas Misevičius
+// Copyright 2025-2026 Rimas Misevičius
 // Distributed under the BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -133,7 +133,7 @@ void bind_urlpattern(nb::module_& m) {
                     return d_res;
                 }
                 return nb::none();
-            }, nb::arg("input") = nb::none())
+            }, nb::arg("input") = nb::dict())
 
         // properties
         .def_prop_ro("protocol", &urlpattern::get_protocol)

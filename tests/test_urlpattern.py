@@ -16,10 +16,13 @@ class TestURLPattern(unittest.TestCase):
         self.assertEqual(p.hash, '*')
         self.assertFalse(p.hasRegExpGroups)
         # test
+        self.assertTrue(p.test())
         self.assertTrue(p.test('https://upa-url.github.io/docs/'))
         self.assertTrue(p.test('docs/', 'https://upa-url.github.io/'))
         self.assertTrue(p.test({'protocol': 'http', 'hostname': 'upa-url.github.io'}))
         # exec
+        e = p.exec()
+        self.assertEqual(e['inputs'], [{}])
         e = p.exec('https://upa-url.github.io/docs/')
         self.assertEqual(e['protocol'], {'input': 'https', 'groups': {'0': 'https'}})
         self.assertEqual(e['hostname'], {'input': 'upa-url.github.io', 'groups': {'0': 'upa-url.github.io'}})
