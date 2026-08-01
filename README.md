@@ -1,8 +1,8 @@
 # upa_url package
 
-This package provides Python bindings for [Upa URL](https://github.com/upa-url/upa) – a library compliant with the [WHATWG URL standard](https://url.spec.whatwg.org/). This is the same standard followed by modern browsers and JavaScript runtimes such as Bun, Deno, and Node.js.
+This package provides Python bindings for the [Upa URL library](https://github.com/upa-url/upa), which is compliant with the WHATWG [URL](https://url.spec.whatwg.org/) and [URL Pattern](https://urlpattern.spec.whatwg.org/) standards. These are the same standards followed by modern browsers and JavaScript runtimes such as Bun, Deno, and Node.js.
 
-This package is designed to be as close to the URL standard as possible. It uses the same class names ([URL](https://url.spec.whatwg.org/#url-class), [URLSearchParams](https://url.spec.whatwg.org/#interface-urlsearchparams)), their function names, the same function parameters, and the same behavior.
+This package is designed to be as close to the URL and URL Pattern standards as possible. It uses the same class names ([URL](https://url.spec.whatwg.org/#url-class), [URLSearchParams](https://url.spec.whatwg.org/#interface-urlsearchparams), [URLPattern](https://urlpattern.spec.whatwg.org/#urlpattern-class)), their function names, the same function parameters, and the same behavior.
 
 ## Installation
 
@@ -16,7 +16,7 @@ If the binary wheel is not available for your platform, then you will need a C++
 
 First, you need to import classes:
 ```python
-from upa_url import PSL, URL, URLSearchParams
+from upa_url import PSL, URL, URLPattern, URLSearchParams
 ```
 
 ### URL class
@@ -127,6 +127,75 @@ There are functions to manipulate search parameters:
    params.sort()
    print(params) # a=3&b=2&c=1
    ```
+
+### URLPattern class
+
+The object of the `URLPattern` class contains a URL pattern matcher that can be used to match against URLs or a dictionary of URL components.
+
+An `URLPattern` object can be created by using a constructor:
+1. The constructor without arguments (`urlp = URLPattern()`) creates an object that matches any URL.
+2. Create from a URL string containing pattern syntax for one or more components:
+   ```python
+   urlp = URLPattern('http{s}?://:label.lt')
+   ```
+3. Create from a relative URL pattern string and base URL:
+   ```python
+   urlp = URLPattern('/:id([0-9]+)', 'https://example.org/')
+   ```
+4. Create from URL components:
+   ```python
+   urlp = URLPattern({'protocol': 'http{s}?', 'hostname': ':label.lt'})
+   # With base URL:
+   urlp = URLPattern({'hostname': ':label.lt', 'baseURL': 'wss://example.com/'})
+   ```
+5. Create `URLPattern` object for case-insensitive matching:
+   ```python
+   urlp = URLPattern('http{s}?://:label.lt/path', {'ignoreCase': True})
+   ```
+
+The constructor parses the pattern string and converts it into a canonical form for each URL component. Each component's canonicalized pattern string can be examined. For example:
+```python
+urlp = URLPattern('http{s}?://:label.lt:([0-9]+)?/:id([a-z]+)')
+print(urlp.protocol) # http{s}?
+print(urlp.username) # *
+print(urlp.password) # *
+print(urlp.hostname) # :label.lt
+print(urlp.port) # ([0-9]+)?
+print(urlp.pathname) # /:id([a-z]+)
+print(urlp.search) # *
+print(urlp.hash) # *
+print(urlp.hasRegExpGroups) # True
+```
+
+Use the `test()` method when you need to check if a URL or a dictionary of URL components matches a URL pattern:
+```python
+urlp = URLPattern('http{s}?://:label.lt:([0-9]+)?/:id([a-z]+)')
+print(urlp.test('https://lrt.lt/mediateka')) # True
+# With base URL:
+print(urlp.test('/123', 'https://lrt.lt/')) # False
+print(urlp.test({'pathname': '/programa', 'baseURL': 'https://lrt.lt/'})) # True
+```
+
+The `exec()` method is similar to the `test()` method. It accepts the same parameters, but returns more information about the match. If there is no match, `exec()` returns `None`. In the case of a match, the `exec()` returns a dictionary with the following keys:
+* `inputs`. This key's value is an array containing the inputs passed to the `exec()`.
+* `protocol`, `username`, `password`, `hostname`, `port`, `pathname`, `search`, and `hash`. Its values are dictionaries that correspond to each URL component. Each dictionary has the following keys:
+  * `input`. The value of this key is the part of the input that corresponds to the URL component.
+  * `groups`. The value of this key is a dictionary with keys for each match group in the URL component (if any), and the corresponding matched values in the inputs. Group keys are numbered from 0 for unnamed match groups (such as the wildcard). For named match groups, the key name is the group name.
+
+Example:
+```python
+urlp = URLPattern('http{s}?://:label.lt:([0-9]+)?/:id([a-z]+)')
+res = urlp.exec('http://lrt.lt:8080/mediateka')
+print(res['inputs']) # ['http://lrt.lt:8080/mediateka']
+print(res['protocol']) # {'input': 'http', 'groups': {}}
+print(res['hostname']) # {'input': 'lrt.lt', 'groups': {'label': 'lrt'}}
+print(res['port']) # {'input': '8080', 'groups': {'0': '8080'}}
+print(res['pathname']) # {'input': '/mediateka', 'groups': {'id': 'mediateka'}}
+print(res['search']) # {'input': '', 'groups': {'0': ''}}
+print(res['hash']) # {'input': '', 'groups': {'0': ''}}
+```
+
+See the [URL Pattern JavaScript documentation](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API) for more information.
 
 ### PSL class
 
