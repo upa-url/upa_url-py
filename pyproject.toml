@@ -1,7 +1,7 @@
 [build-system]
 requires = [
     "scikit-build-core >=0.10, !=0.12.0",
-    "nanobind >=2.9.2, <2.16.0"
+    "nanobind >=2.9.2, <3.1.0"
 ]
 build-backend = "scikit_build_core.build"
 
@@ -13,7 +13,7 @@ authors = [
 ]
 description = "WHATWG URL Standard compliant URL parser library"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: C++",
