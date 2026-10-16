@@ -48,6 +48,9 @@ build-verbosity = 1
 # Enable PyPy
 enable = ["pypy"]
 
+# Skip the broken build
+skip = "pp312-macosx_*"
+
 # Run tests to ensure that the package was correctly built
 test-command = "python -m unittest discover -s {project}/tests"
 
