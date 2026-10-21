@@ -8,7 +8,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "upa_url"
-version = "2.0.1"
+version = "2.1.0"
 authors = [
   { name="Rimas Misevičius", email="rmisev3@gmail.com" },
 ]
